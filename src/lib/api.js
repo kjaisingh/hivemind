@@ -1,4 +1,8 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const configuredApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+const shouldIgnoreConfiguredUrl = !import.meta.env.DEV && /localhost|127\.0\.0\.1/.test(configuredApiUrl);
+const API_URL = shouldIgnoreConfiguredUrl
+  ? ''
+  : (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:3001' : ''));
 
 export async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
