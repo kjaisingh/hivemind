@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: hivemind
+    env: node
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install && npm run build
+    startCommand: npm run db:push && npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: BASE_URL
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false

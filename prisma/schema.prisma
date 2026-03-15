@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum GameRole {
+  ADMIN
+  PLAYER
+}
+
+enum RoundStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  username       String           @unique
+  passwordHash   String?
+  googleId       String?          @unique
+  createdAt      DateTime         @default(now())
+  memberships    GameMembership[]
+  submissions    Submission[]
+  roundScores    RoundScore[]
+  emailLogs      EmailDeliveryLog[]
+  createdGames   Game[]           @relation("GameAdmin")
+}
+
+model Game {
+  id              String             @id @default(cuid())
+  name            String
+  description     String
+  code            String             @unique
+  inviteToken     String             @unique
+  createdAt       DateTime           @default(now())
+  adminId         String
+  admin           User               @relation("GameAdmin", fields: [adminId], references: [id])
+  memberships     GameMembership[]
+  rounds          Round[]
+  emailSettings   GameEmailSettings?
+  emailLogs       EmailDeliveryLog[]
+}
+
+model GameMembership {
+  id        String   @id @default(cuid())
+  gameId    String
+  userId    String
+  role      GameRole @default(PLAYER)
+  joinedAt  DateTime @default(now())
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId])
+}
+
+model Round {
+  id                String             @id @default(cuid())
+  gameId            String
+  name              String
+  description       String?
+  status            RoundStatus        @default(DRAFT)
+  startsAt          DateTime
+  expiresAt         DateTime
+  publishedAt       DateTime?
+  announcementEmail String?
+  createdAt         DateTime           @default(now())
+  game              Game               @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  questions         Question[]
+  scores            RoundScore[]
+}
+
+model Question {
+  id          String               @id @default(cuid())
+  roundId     String
+  prompt      String
+  position    Int
+  round       Round                @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+  answerStats QuestionAnswerStat[]
+}
+
+model Submission {
+  id               String   @id @default(cuid())
+  questionId       String
+  userId           String
+  rawAnswer        String
+  normalizedAnswer String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  question         Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
+}
+
+model RoundScore {
+  id          String   @id @default(cuid())
+  roundId     String
+  userId      String
+  totalScore  Int
+  rank        Int
+  medalAwarded Boolean @default(false)
+  round       Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, userId])
+}
+
+model QuestionAnswerStat {
+  id               String   @id @default(cuid())
+  questionId       String
+  normalizedAnswer String
+  displayAnswer    String
+  count            Int
+  percentage       Float
+  question         Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model GameEmailSettings {
+  id            String  @id @default(cuid())
+  gameId         String @unique
+  autoRoundOpen  Boolean @default(true)
+  autoResultsLive Boolean @default(true)
+  expiringHoursCsv String @default("24,1")
+  game           Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+model EmailDeliveryLog {
+  id           String   @id @default(cuid())
+  dedupeKey    String   @unique
+  gameId       String
+  roundId      String?
+  recipientId  String
+  emailType    String
+  sentAt       DateTime @default(now())
+  game         Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  recipient    User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}
