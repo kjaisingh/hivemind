@@ -10,11 +10,8 @@
     "build": "vite build",
     "start": "node server/index.js",
     "preview": "vite preview",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:seed": "node prisma/seed.js",
-    "setup": "npm run db:push && npm run db:seed",
-    "postinstall": "prisma generate"
+    "db:seed": "node supabase/seed.js",
+    "setup": "npm run db:seed"
   },
   "keywords": [],
   "author": "",
@@ -22,9 +19,8 @@
   "description": "Hivemind multiplayer social guessing game",
   "type": "module",
   "dependencies": {
-    "@prisma/client": "^6.19.2",
+    "@supabase/supabase-js": "^2.101.1",
     "bcryptjs": "^3.0.3",
-    "connect-sqlite3": "^0.9.16",
     "cors": "^2.8.6",
     "dayjs": "^1.11.20",
     "dotenv": "^17.3.1",
@@ -35,7 +31,6 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
-    "prisma": "^6.19.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",

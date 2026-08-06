@@ -2,9 +2,13 @@ import dayjs from 'dayjs';
 import { scoreRound } from './scoring.js';
 import { sendEmail } from './email.js';
 import { toHoursArray } from './utils.js';
+import { getRoundsForClosing, getActiveRoundsWithContext } from './repository.js';
+import { unwrap } from './db.js';
 
-async function sendWithDedup(prisma, { dedupeKey, gameId, roundId, recipient, emailType, subject, intro, gameName }) {
-  const exists = await prisma.emailDeliveryLog.findUnique({ where: { dedupeKey } });
+async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, recipient, emailType, subject, intro, gameName }) {
+  const exists = unwrap(
+    await supabase.from('EmailDeliveryLog').select('*').eq('dedupeKey', dedupeKey).maybeSingle(),
+  );
   if (exists) {
     return;
   }
@@ -16,49 +20,30 @@ async function sendWithDedup(prisma, { dedupeKey, gameId, roundId, recipient, em
     gameName,
   });
 
-  await prisma.emailDeliveryLog.create({
-    data: {
+  unwrap(
+    await supabase.from('EmailDeliveryLog').insert({
       dedupeKey,
       gameId,
       roundId,
       recipientId: recipient.id,
       emailType,
-    },
-  });
+    }),
+  );
 }
 
-export async function processRounds(prisma) {
+export async function processRounds(supabase) {
   const now = new Date();
 
-  const roundsToClose = await prisma.round.findMany({
-    where: {
-      status: 'ACTIVE',
-      expiresAt: {
-        lte: now,
-      },
-    },
-    include: {
-      game: {
-        include: {
-          memberships: {
-            include: {
-              user: true,
-            },
-          },
-          emailSettings: true,
-        },
-      },
-    },
-  });
+  const roundsToClose = await getRoundsForClosing(supabase, now);
 
   for (const round of roundsToClose) {
-    await scoreRound(prisma, round.id);
-    await prisma.round.update({ where: { id: round.id }, data: { status: 'CLOSED' } });
+    await scoreRound(supabase, round.id);
+    unwrap(await supabase.from('Round').update({ status: 'CLOSED' }).eq('id', round.id));
 
     if (round.game.emailSettings?.autoResultsLive) {
       for (const membership of round.game.memberships) {
         const dedupeKey = `results-live:${round.id}:${membership.user.id}`;
-        await sendWithDedup(prisma, {
+        await sendWithDedup(supabase, {
           dedupeKey,
           gameId: round.gameId,
           roundId: round.id,
@@ -72,18 +57,7 @@ export async function processRounds(prisma) {
     }
   }
 
-  const activeRounds = await prisma.round.findMany({
-    where: { status: 'ACTIVE' },
-    include: {
-      game: {
-        include: {
-          memberships: { include: { user: true } },
-          emailSettings: true,
-        },
-      },
-      questions: true,
-    },
-  });
+  const activeRounds = await getActiveRoundsWithContext(supabase);
 
   for (const round of activeRounds) {
     const hoursOptions = toHoursArray(round.game.emailSettings?.expiringHoursCsv || '');
@@ -91,16 +65,12 @@ export async function processRounds(prisma) {
       continue;
     }
 
-    const submissions = await prisma.submission.findMany({
-      where: {
-        question: {
-          roundId: round.id,
-        },
-      },
-    });
+    const questionIds = round.questions.map((question) => question.id);
+    const submissions = questionIds.length
+      ? unwrap(await supabase.from('Submission').select('*').in('questionId', questionIds))
+      : [];
 
     const submittedQuestionPairs = new Set(submissions.map((item) => `${item.userId}:${item.questionId}`));
-    const questionIds = round.questions.map((question) => question.id);
 
     for (const hours of hoursOptions) {
       const triggerStart = dayjs(round.expiresAt).subtract(hours, 'hour');
@@ -117,7 +87,7 @@ export async function processRounds(prisma) {
         }
 
         const dedupeKey = `expiring:${round.id}:${membership.user.id}:${hours}`;
-        await sendWithDedup(prisma, {
+        await sendWithDedup(supabase, {
           dedupeKey,
           gameId: round.gameId,
           roundId: round.id,
@@ -132,10 +102,10 @@ export async function processRounds(prisma) {
   }
 }
 
-export function startRoundScheduler(prisma) {
+export function startRoundScheduler(supabase) {
   setInterval(async () => {
     try {
-      await processRounds(prisma);
+      await processRounds(supabase);
     } catch (error) {
       console.error('[scheduler]', error);
     }

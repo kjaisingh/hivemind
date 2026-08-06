@@ -11,7 +11,7 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 
 
 ## Feature Backlog
-- Send player-suggested questions to admins.
+- Enable sending player-suggested questions to admins.
 - Image/media support for questions.
 - Visual countdown timer showing when the active round expires.
 - Automated email triggers to notify players when rounds open, are about to close, or when results are ready.
@@ -26,13 +26,23 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 ## Tech Stack
 - Frontend: React + Vite.
 - Backend: Node.js + Express.
-- Database: Prisma + SQLite.
+- Database: Supabase (PostgreSQL via `@supabase/supabase-js`).
 - Auth: Passport (Local + Google OAuth).
 - Charts: Recharts.
 - Hosting: Render (single web service).
 
 
 ## Local Development
+### Database Setup
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In the SQL Editor, run the SQL in `supabase/schema.sql`.
+3. Create a `.env` file in this folder (copy `.env.example`) and fill in:
+   ```
+   SUPABASE_URL="https://<your-project-ref>.supabase.co"
+   SUPABASE_SERVICE_ROLE_KEY="<your service_role key>"
+   ```
+   `SUPABASE_URL` is the Supabase **project** URL (Settings → API → Project URL) — not the `/rest/v1/` REST endpoint.
+
 ### Quick Start
 From this folder:
 ```bash
@@ -67,12 +77,14 @@ Seeded game includes:
 After first deploy, set:
 - `BASE_URL=https://<your-render-service>.onrender.com`
 - `CLIENT_URL=https://<your-render-service>.onrender.com`
+- `SUPABASE_URL=https://<your-project-ref>.supabase.co`
+- `SUPABASE_SERVICE_ROLE_KEY=<your service_role key>`
 - `GOOGLE_CALLBACK_URL=https://<your-render-service>.onrender.com/api/auth/google/callback` (only if Google OAuth enabled)
 Redeploy after updating variables.
 
 
 ## Scripts
-- `npm run setup` → initialize DB schema + seed demo data.
+- `npm run setup` → seed demo data (run `supabase/schema.sql` in Supabase first).
 - `npm run dev` → run server and client together.
 - `npm run build` → production frontend build.
 - `npm start` → run production server.
@@ -81,6 +93,8 @@ Redeploy after updating variables.
 ## Environment Variables
 - `BASE_URL`.
 - `CLIENT_URL`.
+- `SUPABASE_URL`: Supabase **project** URL (Settings → API → Project URL, e.g. `https://xxxx.supabase.co`) — not the `/rest/v1/` REST endpoint.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only `service_role` key (Settings → API). Bypasses row-level security by design — never expose it client-side.
 - `SESSION_SECRET`.
 - Google OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`.
 - Email sending: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`.

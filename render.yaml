@@ -5,13 +5,17 @@ services:
     plan: free
     autoDeploy: true
     buildCommand: npm install && npm run build
-    startCommand: npm run db:push && npm start
+    startCommand: npm start
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: BASE_URL
         sync: false
       - key: CLIENT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: SESSION_SECRET
         generateValue: true

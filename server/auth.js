@@ -1,15 +1,14 @@
 import bcrypt from 'bcryptjs';
 import session from 'express-session';
-import connectSqlite3 from 'connect-sqlite3';
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-
-const SQLiteStore = connectSqlite3(session);
+import { SupabaseStore } from './sessionStore.js';
+import { unwrap } from './db.js';
 
 export function createSessionMiddleware() {
   return session({
-    store: new SQLiteStore({ db: 'sessions.sqlite', dir: './prisma' }),
+    store: new SupabaseStore(),
     secret: process.env.SESSION_SECRET || 'hivemind-dev-secret',
     resave: false,
     saveUninitialized: false,
@@ -22,7 +21,7 @@ export function createSessionMiddleware() {
   });
 }
 
-export function configurePassport(prisma) {
+export function configurePassport(supabase) {
   passport.use(
     new LocalStrategy(
       {
@@ -31,7 +30,7 @@ export function configurePassport(prisma) {
       },
       async (email, password, done) => {
         try {
-          const user = await prisma.user.findUnique({ where: { email } });
+          const user = unwrap(await supabase.from('User').select('*').eq('email', email).maybeSingle());
           if (!user?.passwordHash) {
             return done(null, false, { message: 'Invalid credentials.' });
           }
@@ -64,9 +63,9 @@ export function configurePassport(prisma) {
               return done(null, false, { message: 'Google account has no email.' });
             }
 
-            let user = await prisma.user.findUnique({ where: { googleId: profile.id } });
+            let user = unwrap(await supabase.from('User').select('*').eq('googleId', profile.id).maybeSingle());
             if (!user) {
-              user = await prisma.user.findUnique({ where: { email } });
+              user = unwrap(await supabase.from('User').select('*').eq('email', email).maybeSingle());
             }
 
             if (!user) {
@@ -76,18 +75,17 @@ export function configurePassport(prisma) {
                 .slice(0, 14);
               const username = `${base}${Math.floor(Math.random() * 900 + 100)}`;
 
-              user = await prisma.user.create({
-                data: {
-                  email,
-                  username,
-                  googleId: profile.id,
-                },
-              });
+              user = unwrap(
+                await supabase
+                  .from('User')
+                  .insert({ email, username, googleId: profile.id })
+                  .select()
+                  .single(),
+              );
             } else if (!user.googleId) {
-              user = await prisma.user.update({
-                where: { id: user.id },
-                data: { googleId: profile.id },
-              });
+              user = unwrap(
+                await supabase.from('User').update({ googleId: profile.id }).eq('id', user.id).select().single(),
+              );
             }
 
             return done(null, user);
@@ -105,7 +103,7 @@ export function configurePassport(prisma) {
 
   passport.deserializeUser(async (id, done) => {
     try {
-      const user = await prisma.user.findUnique({ where: { id } });
+      const user = unwrap(await supabase.from('User').select('*').eq('id', id).maybeSingle());
       done(null, user);
     } catch (error) {
       done(error);

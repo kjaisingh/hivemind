@@ -1,29 +1,15 @@
 import { normalizeAnswer, safeDisplayAnswer } from './utils.js';
+import { getRoundScoringData } from './repository.js';
+import { unwrap } from './db.js';
 
-export async function scoreRound(prisma, roundId) {
-  const round = await prisma.round.findUnique({
-    where: { id: roundId },
-    include: {
-      game: {
-        include: {
-          memberships: {
-            include: { user: true },
-          },
-        },
-      },
-      questions: {
-        orderBy: { position: 'asc' },
-        include: {
-          submissions: true,
-        },
-      },
-    },
-  });
+export async function scoreRound(supabase, roundId) {
+  const data = await getRoundScoringData(supabase, roundId);
+  if (!data) return;
 
-  const players = round.game.memberships.map((membership) => membership.user);
+  const { players, questions } = data;
   const totals = new Map(players.map((player) => [player.id, 0]));
 
-  for (const question of round.questions) {
+  for (const question of questions) {
     const grouped = new Map();
 
     for (const submission of question.submissions) {
@@ -40,18 +26,20 @@ export async function scoreRound(prisma, roundId) {
     const stats = Array.from(grouped.values()).sort((a, b) => b.count - a.count);
     const totalResponses = question.submissions.length;
 
-    await prisma.questionAnswerStat.deleteMany({ where: { questionId: question.id } });
+    unwrap(await supabase.from('QuestionAnswerStat').delete().eq('questionId', question.id));
 
     if (stats.length > 0) {
-      await prisma.questionAnswerStat.createMany({
-        data: stats.map((item) => ({
-          questionId: question.id,
-          normalizedAnswer: item.normalizedAnswer,
-          displayAnswer: item.displayAnswer,
-          count: item.count,
-          percentage: totalResponses > 0 ? (item.count / totalResponses) * 100 : 0,
-        })),
-      });
+      unwrap(
+        await supabase.from('QuestionAnswerStat').insert(
+          stats.map((item) => ({
+            questionId: question.id,
+            normalizedAnswer: item.normalizedAnswer,
+            displayAnswer: item.displayAnswer,
+            count: item.count,
+            percentage: totalResponses > 0 ? (item.count / totalResponses) * 100 : 0,
+          })),
+        ),
+      );
     }
 
     for (const submission of question.submissions) {
@@ -61,7 +49,7 @@ export async function scoreRound(prisma, roundId) {
     }
   }
 
-  await prisma.roundScore.deleteMany({ where: { roundId } });
+  unwrap(await supabase.from('RoundScore').delete().eq('roundId', roundId));
 
   const sorted = Array.from(totals.entries())
     .map(([userId, totalScore]) => ({ userId, totalScore }))
@@ -86,6 +74,6 @@ export async function scoreRound(prisma, roundId) {
   });
 
   if (rows.length > 0) {
-    await prisma.roundScore.createMany({ data: rows });
+    unwrap(await supabase.from('RoundScore').insert(rows));
   }
 }

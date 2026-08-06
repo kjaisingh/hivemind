@@ -5,10 +5,11 @@ import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { prisma } from './db.js';
+import { supabase, unwrap } from './db.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
 import { requireAuth } from './middleware.js';
 import { createGameCode, createInviteToken, normalizeAnswer } from './utils.js';
+import { getDashboardData, getGameDetail, getRoundResults } from './repository.js';
 import { scoreRound } from './scoring.js';
 import { startRoundScheduler, processRounds } from './roundScheduler.js';
 import { sendEmail } from './email.js';
@@ -29,7 +30,7 @@ app.use(
 );
 app.use(express.json());
 app.use(createSessionMiddleware());
-configurePassport(prisma);
+configurePassport(supabase);
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -61,26 +62,37 @@ function buildGameInvite(game) {
 }
 
 async function ensureMembership(gameId, userId, role = 'PLAYER') {
-  const existing = await prisma.gameMembership.findUnique({
-    where: {
-      gameId_userId: { gameId, userId },
-    },
-  });
+  const existing = unwrap(
+    await supabase.from('GameMembership').select('*').eq('gameId', gameId).eq('userId', userId).maybeSingle(),
+  );
 
   if (existing) {
     return existing;
   }
 
-  return prisma.gameMembership.create({
-    data: { gameId, userId, role },
-  });
+  return unwrap(await supabase.from('GameMembership').insert({ gameId, userId, role }).select().single());
 }
 
 async function getRole(gameId, userId) {
-  const membership = await prisma.gameMembership.findUnique({
-    where: { gameId_userId: { gameId, userId } },
-  });
+  const membership = unwrap(
+    await supabase.from('GameMembership').select('*').eq('gameId', gameId).eq('userId', userId).maybeSingle(),
+  );
   return membership?.role;
+}
+
+async function claimPendingInvite(req, userId) {
+  const inviteToken = req.session.pendingInviteToken;
+  if (!inviteToken) {
+    return { inviteToken: null, game: null };
+  }
+
+  const game = unwrap(await supabase.from('Game').select('*').eq('inviteToken', inviteToken).maybeSingle());
+  if (game) {
+    await ensureMembership(game.id, userId);
+  }
+  req.session.pendingInviteToken = null;
+
+  return { inviteToken, game };
 }
 
 app.get('/api/health', (_req, res) => {
@@ -114,34 +126,21 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 
   const { email, username, password } = parsed.data;
-  const existingEmail = await prisma.user.findUnique({ where: { email } });
-  const existingUsername = await prisma.user.findUnique({ where: { username } });
+  const existingEmail = unwrap(await supabase.from('User').select('*').eq('email', email).maybeSingle());
+  const existingUsername = unwrap(await supabase.from('User').select('*').eq('username', username).maybeSingle());
   if (existingEmail || existingUsername) {
     return res.status(400).json({ message: 'Email or username already exists.' });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: {
-      email,
-      username,
-      passwordHash,
-    },
-  });
+  const user = unwrap(await supabase.from('User').insert({ email, username, passwordHash }).select().single());
 
   req.login(user, async (error) => {
     if (error) {
       return res.status(500).json({ message: 'Failed to login.' });
     }
 
-    const inviteToken = req.session.pendingInviteToken;
-    if (inviteToken) {
-      const game = await prisma.game.findUnique({ where: { inviteToken } });
-      if (game) {
-        await ensureMembership(game.id, user.id);
-      }
-      req.session.pendingInviteToken = null;
-    }
+    const { inviteToken } = await claimPendingInvite(req, user.id);
 
     return res.json({
       user: { id: user.id, email: user.email, username: user.username },
@@ -161,14 +160,7 @@ app.post('/api/auth/login', (req, res, next) => {
         return res.status(500).json({ message: 'Login failed.' });
       }
 
-      const inviteToken = req.session.pendingInviteToken;
-      if (inviteToken) {
-        const game = await prisma.game.findUnique({ where: { inviteToken } });
-        if (game) {
-          await ensureMembership(game.id, user.id);
-        }
-        req.session.pendingInviteToken = null;
-      }
+      const { inviteToken } = await claimPendingInvite(req, user.id);
 
       return res.json({
         user: { id: user.id, email: user.email, username: user.username },
@@ -199,21 +191,16 @@ app.get('/api/auth/google', (req, res, next) => {
 });
 
 app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: '/auth?error=google' }), async (req, res) => {
-  const inviteToken = req.session.pendingInviteToken;
-  if (inviteToken) {
-    const game = await prisma.game.findUnique({ where: { inviteToken } });
-    if (game) {
-      await ensureMembership(game.id, req.user.id);
-      req.session.pendingInviteToken = null;
-      return res.redirect(`${clientUrl}/games/${game.id}`);
-    }
+  const { game } = await claimPendingInvite(req, req.user.id);
+  if (game) {
+    return res.redirect(`${clientUrl}/games/${game.id}`);
   }
 
   return res.redirect(`${clientUrl}/dashboard`);
 });
 
 app.get('/api/join/:inviteToken', async (req, res) => {
-  const game = await prisma.game.findUnique({ where: { inviteToken: req.params.inviteToken } });
+  const game = unwrap(await supabase.from('Game').select('*').eq('inviteToken', req.params.inviteToken).maybeSingle());
   if (!game) {
     return res.status(404).json({ message: 'Invite link is invalid.' });
   }
@@ -228,66 +215,25 @@ app.get('/api/join/:inviteToken', async (req, res) => {
 });
 
 app.get('/api/dashboard', requireAuth, async (req, res) => {
-  await processRounds(prisma);
+  await processRounds(supabase);
 
-  const memberships = await prisma.gameMembership.findMany({
-    where: { userId: req.user.id },
-    include: {
-      game: {
-        include: {
-          rounds: {
-            orderBy: { expiresAt: 'desc' },
-            include: {
-              questions: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const { memberships, answersByRound } = await getDashboardData(supabase, req.user.id);
 
-  const gameIds = memberships.map((membership) => membership.gameId);
-  const submissions = await prisma.submission.findMany({
-    where: {
-      userId: req.user.id,
-      question: {
-        round: {
-          gameId: {
-            in: gameIds,
-          },
-        },
-      },
-    },
-    include: {
-      question: {
-        include: {
-          round: true,
-        },
-      },
-    },
-  });
-
-  const answersByRound = submissions.reduce((map, submission) => {
-    const roundId = submission.question.roundId;
-    map[roundId] = (map[roundId] || 0) + 1;
-    return map;
-  }, {});
-
-  const games = memberships.map((membership) => {
-    const activeRound = membership.game.rounds.find((round) => round.status === 'ACTIVE');
-    const recentClosed = membership.game.rounds.filter((round) => round.status === 'CLOSED').slice(0, 3);
+  const games = memberships.map(({ role, game, rounds }) => {
+    const activeRound = rounds.find((round) => round.status === 'ACTIVE');
+    const recentClosed = rounds.filter((round) => round.status === 'CLOSED').slice(0, 3);
 
     const pending = activeRound
       ? (answersByRound[activeRound.id] || 0) < activeRound.questions.length
       : false;
 
     return {
-      id: membership.game.id,
-      role: membership.role,
-      name: membership.game.name,
-      description: membership.game.description,
-      code: membership.game.code,
-      inviteUrl: buildGameInvite(membership.game),
+      id: game.id,
+      role,
+      name: game.name,
+      description: game.description,
+      code: game.code,
+      inviteUrl: buildGameInvite(game),
       hasPendingSubmission: pending,
       activeRound: activeRound
         ? {
@@ -316,24 +262,22 @@ app.post('/api/games', requireAuth, async (req, res) => {
   const code = createGameCode();
   const inviteToken = createInviteToken();
 
-  const game = await prisma.game.create({
-    data: {
-      name: parsed.data.name,
-      description: parsed.data.description,
-      code,
-      inviteToken,
-      adminId: req.user.id,
-      memberships: {
-        create: {
-          userId: req.user.id,
-          role: 'ADMIN',
-        },
-      },
-      emailSettings: {
-        create: {},
-      },
-    },
-  });
+  const game = unwrap(
+    await supabase
+      .from('Game')
+      .insert({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        code,
+        inviteToken,
+        adminId: req.user.id,
+      })
+      .select()
+      .single(),
+  );
+
+  unwrap(await supabase.from('GameMembership').insert({ gameId: game.id, userId: req.user.id, role: 'ADMIN' }));
+  unwrap(await supabase.from('GameEmailSettings').insert({ gameId: game.id }));
 
   res.json({
     game: {
@@ -345,7 +289,7 @@ app.post('/api/games', requireAuth, async (req, res) => {
 
 app.post('/api/games/join', requireAuth, async (req, res) => {
   const code = String(req.body.code || '').trim().toUpperCase();
-  const game = await prisma.game.findUnique({ where: { code } });
+  const game = unwrap(await supabase.from('Game').select('*').eq('code', code).maybeSingle());
   if (!game) {
     return res.status(404).json({ message: 'Game code not found.' });
   }
@@ -355,61 +299,19 @@ app.post('/api/games/join', requireAuth, async (req, res) => {
 });
 
 app.get('/api/games/:gameId', requireAuth, async (req, res) => {
-  await processRounds(prisma);
+  await processRounds(supabase);
   const role = await getRole(req.params.gameId, req.user.id);
   if (!role) {
     return res.status(403).json({ message: 'Not part of this game.' });
   }
 
-  const game = await prisma.game.findUnique({
-    where: { id: req.params.gameId },
-    include: {
-      memberships: { include: { user: true } },
-      rounds: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          questions: {
-            orderBy: { position: 'asc' },
-          },
-        },
-      },
-      emailSettings: true,
-    },
-  });
+  const { game, memberships, rounds, emailSettings, scoreMap, medalMap } = await getGameDetail(supabase, req.params.gameId);
 
-  const activeRound = game.rounds.find((round) => round.status === 'ACTIVE') || null;
-  const pastRounds = game.rounds.filter((round) => round.status === 'CLOSED');
-  const draftRounds = game.rounds.filter((round) => round.status === 'DRAFT');
+  const activeRound = rounds.find((round) => round.status === 'ACTIVE') || null;
+  const pastRounds = rounds.filter((round) => round.status === 'CLOSED');
+  const draftRounds = rounds.filter((round) => round.status === 'DRAFT');
 
-  const seasonScores = await prisma.roundScore.groupBy({
-    by: ['userId'],
-    where: {
-      round: {
-        gameId: game.id,
-      },
-    },
-    _sum: {
-      totalScore: true,
-    },
-  });
-
-  const medalCounts = await prisma.roundScore.groupBy({
-    by: ['userId'],
-    where: {
-      round: {
-        gameId: game.id,
-      },
-      medalAwarded: true,
-    },
-    _count: {
-      _all: true,
-    },
-  });
-
-  const scoreMap = new Map(seasonScores.map((row) => [row.userId, row._sum.totalScore || 0]));
-  const medalMap = new Map(medalCounts.map((row) => [row.userId, row._count._all]));
-
-  const leaderboard = game.memberships
+  const leaderboard = memberships
     .map((membership) => ({
       userId: membership.userId,
       username: membership.user.username,
@@ -421,14 +323,13 @@ app.get('/api/games/:gameId', requireAuth, async (req, res) => {
 
   let answers = [];
   if (activeRound) {
-    answers = await prisma.submission.findMany({
-      where: {
-        userId: req.user.id,
-        question: {
-          roundId: activeRound.id,
-        },
-      },
-    });
+    answers = unwrap(
+      await supabase
+        .from('Submission')
+        .select('*')
+        .eq('userId', req.user.id)
+        .in('questionId', activeRound.questions.map((question) => question.id)),
+    );
   }
 
   res.json({
@@ -462,7 +363,7 @@ app.get('/api/games/:gameId', requireAuth, async (req, res) => {
         startsAt: round.startsAt,
         expiresAt: round.expiresAt,
       })),
-      emailSettings: game.emailSettings,
+      emailSettings,
     },
   });
 });
@@ -473,27 +374,29 @@ app.post('/api/games/:gameId/active-round/save', requireAuth, async (req, res) =
     return res.status(403).json({ message: 'Not part of this game.' });
   }
 
-  const round = await prisma.round.findFirst({
-    where: {
-      gameId: req.params.gameId,
-      status: 'ACTIVE',
-    },
-    include: {
-      questions: true,
-    },
-  });
+  const activeRounds = unwrap(
+    await supabase
+      .from('Round')
+      .select('*')
+      .eq('gameId', req.params.gameId)
+      .eq('status', 'ACTIVE')
+      .order('createdAt', { ascending: false })
+      .limit(1),
+  );
+  const round = activeRounds[0];
 
   if (!round) {
     return res.status(400).json({ message: 'No active round.' });
   }
 
   if (new Date(round.expiresAt) <= new Date()) {
-    await processRounds(prisma);
+    await processRounds(supabase);
     return res.status(400).json({ message: 'Round is closed.' });
   }
 
+  const questions = unwrap(await supabase.from('Question').select('*').eq('roundId', round.id));
   const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
-  const validQuestionIds = new Set(round.questions.map((question) => question.id));
+  const validQuestionIds = new Set(questions.map((question) => question.id));
 
   for (const row of answers) {
     const questionId = row.questionId;
@@ -506,24 +409,17 @@ app.post('/api/games/:gameId/active-round/save', requireAuth, async (req, res) =
       continue;
     }
 
-    await prisma.submission.upsert({
-      where: {
-        questionId_userId: {
+    unwrap(
+      await supabase.from('Submission').upsert(
+        {
           questionId,
           userId: req.user.id,
+          rawAnswer: answer,
+          normalizedAnswer: normalizeAnswer(answer),
         },
-      },
-      update: {
-        rawAnswer: answer,
-        normalizedAnswer: normalizeAnswer(answer),
-      },
-      create: {
-        questionId,
-        userId: req.user.id,
-        rawAnswer: answer,
-        normalizedAnswer: normalizeAnswer(answer),
-      },
-    });
+        { onConflict: 'questionId,userId' },
+      ),
+    );
   }
 
   res.json({ ok: true });
@@ -540,22 +436,30 @@ app.post('/api/games/:gameId/rounds', requireAuth, async (req, res) => {
     return res.status(400).json({ message: 'Invalid round data.' });
   }
 
-  const round = await prisma.round.create({
-    data: {
-      gameId: req.params.gameId,
-      name: parsed.data.name,
-      description: parsed.data.description,
-      startsAt: new Date(parsed.data.startsAt),
-      expiresAt: new Date(parsed.data.expiresAt),
-      status: 'DRAFT',
-      questions: {
-        create: parsed.data.questions.map((question, index) => ({
-          prompt: question,
-          position: index + 1,
-        })),
-      },
-    },
-  });
+  const round = unwrap(
+    await supabase
+      .from('Round')
+      .insert({
+        gameId: req.params.gameId,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        startsAt: new Date(parsed.data.startsAt).toISOString(),
+        expiresAt: new Date(parsed.data.expiresAt).toISOString(),
+        status: 'DRAFT',
+      })
+      .select()
+      .single(),
+  );
+
+  unwrap(
+    await supabase.from('Question').insert(
+      parsed.data.questions.map((question, index) => ({
+        roundId: round.id,
+        prompt: question,
+        position: index + 1,
+      })),
+    ),
+  );
 
   res.json({ roundId: round.id });
 });
@@ -568,30 +472,35 @@ app.post('/api/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, 
 
   const announcement = String(req.body.announcement || '').trim();
 
-  const round = await prisma.round.update({
-    where: { id: req.params.roundId },
-    data: {
-      status: 'ACTIVE',
-      publishedAt: new Date(),
-      announcementEmail: announcement,
-    },
-    include: {
-      game: {
-        include: {
-          memberships: { include: { user: true } },
-          emailSettings: true,
-        },
-      },
-    },
-  });
+  const round = unwrap(
+    await supabase
+      .from('Round')
+      .update({
+        status: 'ACTIVE',
+        publishedAt: new Date().toISOString(),
+        announcementEmail: announcement,
+      })
+      .eq('id', req.params.roundId)
+      .select()
+      .single(),
+  );
 
-  if (round.game.emailSettings?.autoRoundOpen) {
-    for (const membership of round.game.memberships) {
+  const game = unwrap(await supabase.from('Game').select('*').eq('id', round.gameId).maybeSingle());
+  const emailSettings = unwrap(
+    await supabase.from('GameEmailSettings').select('*').eq('gameId', round.gameId).maybeSingle(),
+  );
+
+  if (emailSettings?.autoRoundOpen) {
+    const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
+    const userIds = memberships.map((membership) => membership.userId);
+    const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+
+    for (const user of users) {
       await sendEmail({
-        to: membership.user.email,
-        subject: `${round.game.name}: ${round.name} is live`,
+        to: user.email,
+        subject: `${game.name}: ${round.name} is live`,
         intro: announcement || 'A fresh round just opened. Time to read minds and earn points.',
-        gameName: round.game.name,
+        gameName: game.name,
       });
     }
   }
@@ -609,20 +518,21 @@ app.put('/api/games/:gameId/email-settings', requireAuth, async (req, res) => {
     ? req.body.expiringHours.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
     : [];
 
-  const settings = await prisma.gameEmailSettings.upsert({
-    where: { gameId: req.params.gameId },
-    update: {
-      autoRoundOpen: Boolean(req.body.autoRoundOpen),
-      autoResultsLive: Boolean(req.body.autoResultsLive),
-      expiringHoursCsv: expiringHours.join(','),
-    },
-    create: {
-      gameId: req.params.gameId,
-      autoRoundOpen: Boolean(req.body.autoRoundOpen),
-      autoResultsLive: Boolean(req.body.autoResultsLive),
-      expiringHoursCsv: expiringHours.join(','),
-    },
-  });
+  const settings = unwrap(
+    await supabase
+      .from('GameEmailSettings')
+      .upsert(
+        {
+          gameId: req.params.gameId,
+          autoRoundOpen: Boolean(req.body.autoRoundOpen),
+          autoResultsLive: Boolean(req.body.autoResultsLive),
+          expiringHoursCsv: expiringHours.join(','),
+        },
+        { onConflict: 'gameId' },
+      )
+      .select()
+      .single(),
+  );
 
   res.json({ settings });
 });
@@ -636,14 +546,14 @@ app.post('/api/games/:gameId/email/manual', requireAuth, async (req, res) => {
   const subject = String(req.body.subject || '').trim();
   const message = String(req.body.message || '').trim();
 
-  const game = await prisma.game.findUnique({
-    where: { id: req.params.gameId },
-    include: { memberships: { include: { user: true } } },
-  });
+  const game = unwrap(await supabase.from('Game').select('*').eq('id', req.params.gameId).maybeSingle());
+  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', req.params.gameId));
+  const userIds = memberships.map((membership) => membership.userId);
+  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
 
-  for (const membership of game.memberships) {
+  for (const user of users) {
     await sendEmail({
-      to: membership.user.email,
+      to: user.email,
       subject,
       intro: message,
       gameName: game.name,
@@ -659,52 +569,28 @@ app.get('/api/games/:gameId/rounds/:roundId/results', requireAuth, async (req, r
     return res.status(403).json({ message: 'Not part of this game.' });
   }
 
-  await processRounds(prisma);
+  await processRounds(supabase);
 
-  const round = await prisma.round.findUnique({
-    where: { id: req.params.roundId },
-    include: {
-      game: true,
-      scores: {
-        include: {
-          user: true,
-        },
-        orderBy: [{ rank: 'asc' }, { totalScore: 'desc' }],
-      },
-      questions: {
-        orderBy: { position: 'asc' },
-        include: {
-          answerStats: {
-            orderBy: { count: 'desc' },
-          },
-          submissions: {
-            where: {
-              userId: req.user.id,
-            },
-          },
-        },
-      },
-    },
-  });
+  const { round, game, scores, questions } = await getRoundResults(supabase, req.params.roundId, req.user.id);
 
-  const ownScore = round.scores.find((score) => score.userId === req.user.id) || {
-    totalScore: 0,
-    rank: round.scores.length + 1,
-  };
+  const ownScoreRow = scores.find((score) => score.userId === req.user.id);
+  const ownScore = ownScoreRow
+    ? { totalScore: ownScoreRow.totalScore, rank: ownScoreRow.rank, medalAwarded: ownScoreRow.medalAwarded }
+    : { totalScore: 0, rank: scores.length + 1 };
 
   res.json({
     round: {
       id: round.id,
       name: round.name,
-      gameName: round.game.name,
+      gameName: game.name,
       ownScore,
-      leaderboard: round.scores.map((score) => ({
+      leaderboard: scores.map((score) => ({
         userId: score.userId,
         username: score.user.username,
         totalScore: score.totalScore,
         rank: score.rank,
       })),
-      questions: round.questions.map((question) => ({
+      questions: questions.map((question) => ({
         id: question.id,
         prompt: question.prompt,
         yourAnswer: question.submissions[0]?.rawAnswer || '',
@@ -712,15 +598,6 @@ app.get('/api/games/:gameId/rounds/:roundId/results', requireAuth, async (req, r
       })),
     },
   });
-});
-
-app.get('/join/:inviteToken', async (req, res) => {
-  const game = await prisma.game.findUnique({ where: { inviteToken: req.params.inviteToken } });
-  if (!game) {
-    return res.redirect(`${clientUrl}/auth?invite=invalid`);
-  }
-
-  return res.redirect(`${clientUrl}/join/${req.params.inviteToken}`);
 });
 
 app.use(express.static(path.join(root, 'dist')));
@@ -734,7 +611,7 @@ app.use((error, _req, res, _next) => {
 });
 
 app.listen(port, async () => {
-  await processRounds(prisma);
-  startRoundScheduler(prisma);
+  await processRounds(supabase);
+  startRoundScheduler(supabase);
   console.log(`Hivemind running on http://localhost:${port}`);
 });
