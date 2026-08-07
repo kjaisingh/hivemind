@@ -10,8 +10,9 @@ import { supabase, unwrap } from './db.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
 import { requireAuth } from './middleware.js';
 import { createGameCode, createInviteToken, normalizeAnswer } from './utils.js';
+import dayjs from 'dayjs';
 import { getDashboardData, getGameDetail, getRoundResults } from './repository.js';
-import { startRoundScheduler, processRounds } from './roundScheduler.js';
+import { startRoundScheduler, processRounds, sendWithDedup } from './roundScheduler.js';
 import { sendEmail } from './email.js';
 
 const app = express();
@@ -625,6 +626,63 @@ app.post('/api/games/:gameId/email/manual', requireAuth, emailLimiter, async (re
   }
 
   res.json({ ok: true });
+});
+
+app.post('/api/games/:gameId/rounds/:roundId/remind', requireAuth, emailLimiter, async (req, res) => {
+  const role = await getRole(req.params.gameId, req.user.id);
+  if (role !== 'ADMIN') {
+    return res.status(403).json({ message: 'Admin only.' });
+  }
+
+  const round = unwrap(
+    await supabase
+      .from('Round')
+      .select('*')
+      .eq('id', req.params.roundId)
+      .eq('gameId', req.params.gameId)
+      .maybeSingle(),
+  );
+
+  if (!round) {
+    return res.status(404).json({ message: 'Round not found.' });
+  }
+
+  if (round.status !== 'ACTIVE') {
+    return res.status(400).json({ message: 'Only active rounds can be reminded.' });
+  }
+
+  const game = unwrap(await supabase.from('Game').select('*').eq('id', round.gameId).maybeSingle());
+  const questions = unwrap(await supabase.from('Question').select('*').eq('roundId', round.id));
+  const questionIds = questions.map((question) => question.id);
+
+  const submissions = questionIds.length
+    ? unwrap(await supabase.from('Submission').select('*').in('questionId', questionIds))
+    : [];
+  const submittedPairs = new Set(submissions.map((item) => `${item.userId}:${item.questionId}`));
+
+  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
+  const userIds = memberships.map((membership) => membership.userId);
+  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+
+  const pendingUsers = users.filter(
+    (user) => !questionIds.every((questionId) => submittedPairs.has(`${user.id}:${questionId}`)),
+  );
+
+  for (const user of pendingUsers) {
+    const dedupeKey = `manual-reminder:${round.id}:${user.id}:${dayjs().format('YYYY-MM-DD')}`;
+    await sendWithDedup(supabase, {
+      dedupeKey,
+      gameId: round.gameId,
+      roundId: round.id,
+      recipient: user,
+      emailType: 'MANUAL_REMINDER',
+      subject: `${game.name}: don't forget ${round.name}`,
+      intro: 'Friendly nudge from your game admin — you still have unanswered questions in this round.',
+      gameName: game.name,
+    });
+  }
+
+  res.json({ remindedCount: pendingUsers.length });
 });
 
 app.get('/api/games/:gameId/rounds/:roundId/results', requireAuth, async (req, res) => {

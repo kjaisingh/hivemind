@@ -159,6 +159,10 @@ h3 {
   gap: var(--space-20);
 }
 
+.stack-end {
+  align-items: flex-end;
+}
+
 .row,
 .row-between {
   display: flex;

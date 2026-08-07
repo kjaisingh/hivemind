@@ -64,6 +64,7 @@ export default function GamePage() {
   const [publishing, setPublishing] = useState(false);
   const [savingEmailSettings, setSavingEmailSettings] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [remindingPlayers, setRemindingPlayers] = useState(false);
 
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
 
@@ -230,6 +231,26 @@ export default function GamePage() {
     }
   }
 
+  async function sendReminder() {
+    setError('');
+    setRemindingPlayers(true);
+    try {
+      const data = await api(`/api/games/${gameId}/rounds/${game.activeRound.id}/remind`, {
+        method: 'POST',
+      });
+
+      setStatus(
+        data.remindedCount === 0
+          ? 'Everyone has already submitted — no reminders needed.'
+          : `Reminded ${data.remindedCount} player(s) with unanswered questions.`,
+      );
+    } catch (remindError) {
+      setError(remindError.message);
+    } finally {
+      setRemindingPlayers(false);
+    }
+  }
+
   function toggleHour(value) {
     setEmailSettings((prev) => {
       const has = prev.expiringHours.includes(value);
@@ -287,7 +308,19 @@ export default function GamePage() {
                   <h2>{game.activeRound.name}</h2>
                   <p>{game.activeRound.description}</p>
                 </div>
-                <Countdown expiresAt={game.activeRound.expiresAt} onExpire={handleRoundExpire} />
+                <div className="stack stack-end">
+                  <Countdown expiresAt={game.activeRound.expiresAt} onExpire={handleRoundExpire} />
+                  {game.role === 'ADMIN' && !roundExpired && (
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={sendReminder}
+                      disabled={remindingPlayers}
+                    >
+                      {remindingPlayers ? 'Reminding...' : 'Remind pending players'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {game.activeRound.questions.map((question) => (

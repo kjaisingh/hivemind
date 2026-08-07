@@ -5,7 +5,7 @@ import { toHoursArray } from './utils.js';
 import { getRoundsForClosing, getActiveRoundsWithContext } from './repository.js';
 import { unwrap } from './db.js';
 
-async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, recipient, emailType, subject, intro, gameName }) {
+export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, recipient, emailType, subject, intro, gameName }) {
   const { error: insertError } = await supabase.from('EmailDeliveryLog').insert({
     dedupeKey,
     gameId,
