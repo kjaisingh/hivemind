@@ -42,6 +42,14 @@ export class SupabaseStore extends session.Store {
   }
 
   async touch(sid, sess, callback) {
-    return this.set(sid, sess, callback);
+    try {
+      const maxAge = sess.cookie?.maxAge ?? 1000 * 60 * 60 * 24;
+      const expiresAt = new Date(Date.now() + maxAge).toISOString();
+      const { error } = await supabase.from('Session').update({ expiresAt }).eq('sid', sid);
+      if (error) throw new Error(error.message);
+      callback(null);
+    } catch (error) {
+      callback(error);
+    }
   }
 }

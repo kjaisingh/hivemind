@@ -7,3 +7,5 @@ dist
 *.sqlite-journal
 *.db
 .DS_Store
+test-results
+playwright-report

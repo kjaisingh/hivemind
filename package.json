@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"No tests configured\"",
+    "test": "playwright test",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "nodemon server/index.js",
     "dev:client": "vite",
@@ -36,15 +36,20 @@
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
     "recharts": "^3.8.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@vitejs/plugin-react": "^6.0.1",
+    "vite": "^8.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.1",
+    "@playwright/test": "^1.62.1",
     "concurrently": "^9.2.1",
-    "nodemon": "^3.1.14",
-    "vite": "^8.0.0"
+    "nodemon": "^3.1.14"
   },
   "engines": {
     "node": ">=22"
+  },
+  "nodemonConfig": {
+    "watch": ["server"],
+    "ext": "js,mjs,cjs,json"
   }
 }
