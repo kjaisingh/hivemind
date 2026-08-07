@@ -110,8 +110,10 @@ export async function getGameDetail(supabase, gameId) {
   };
 }
 
-export async function getRoundResults(supabase, roundId, userId) {
-  const round = unwrap(await supabase.from('Round').select('*').eq('id', roundId).maybeSingle());
+export async function getRoundResults(supabase, roundId, gameId, userId) {
+  const round = unwrap(
+    await supabase.from('Round').select('*').eq('id', roundId).eq('gameId', gameId).maybeSingle(),
+  );
   if (!round) {
     return null;
   }

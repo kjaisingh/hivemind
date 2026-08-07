@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { supabase, unwrap } from './db.js';
@@ -10,11 +11,11 @@ import { createSessionMiddleware, configurePassport, passport } from './auth.js'
 import { requireAuth } from './middleware.js';
 import { createGameCode, createInviteToken, normalizeAnswer } from './utils.js';
 import { getDashboardData, getGameDetail, getRoundResults } from './repository.js';
-import { scoreRound } from './scoring.js';
 import { startRoundScheduler, processRounds } from './roundScheduler.js';
 import { sendEmail } from './email.js';
 
 const app = express();
+app.set('trust proxy', 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
@@ -35,13 +36,13 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 const signUpSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().toLowerCase(),
   username: z
     .string()
     .min(3)
     .max(24)
     .regex(/^[a-zA-Z0-9_]+$/),
-  password: z.string().min(8),
+  password: z.string().min(8).max(72),
 });
 
 const gameSchema = z.object({
@@ -49,12 +50,45 @@ const gameSchema = z.object({
   description: z.string().min(2).max(240),
 });
 
-const roundSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().max(240).optional(),
-  startsAt: z.string().min(1),
-  expiresAt: z.string().min(1),
-  questions: z.array(z.string().min(1)).min(1),
+const roundSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().max(240).optional(),
+    startsAt: z.string().min(1),
+    expiresAt: z.string().min(1),
+    questions: z.array(z.string().min(1).max(240)).min(1).max(20),
+  })
+  .refine((data) => !Number.isNaN(new Date(data.startsAt).getTime()), {
+    message: 'Invalid start date.',
+    path: ['startsAt'],
+  })
+  .refine((data) => !Number.isNaN(new Date(data.expiresAt).getTime()), {
+    message: 'Invalid expiry date.',
+    path: ['expiresAt'],
+  });
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+});
+
+const joinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+});
+
+const emailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many emails sent. Please try again later.' },
 });
 
 function buildGameInvite(game) {
@@ -119,7 +153,7 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', loginLimiter, async (req, res) => {
   const parsed = signUpSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid sign up data.' });
@@ -135,44 +169,64 @@ app.post('/api/auth/signup', async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 10);
   const user = unwrap(await supabase.from('User').insert({ email, username, passwordHash }).select().single());
 
-  req.login(user, async (error) => {
+  req.login(user, (error) => {
     if (error) {
       return res.status(500).json({ message: 'Failed to login.' });
     }
 
-    const { inviteToken } = await claimPendingInvite(req, user.id);
-
-    return res.json({
-      user: { id: user.id, email: user.email, username: user.username },
-      pendingInviteToken: inviteToken || null,
-    });
+    claimPendingInvite(req, user.id)
+      .then(({ inviteToken }) => {
+        res.json({
+          user: { id: user.id, email: user.email, username: user.username },
+          pendingInviteToken: inviteToken || null,
+        });
+      })
+      .catch(() => {
+        res.status(500).json({ message: 'Failed to complete sign up.' });
+      });
   });
 });
 
-app.post('/api/auth/login', (req, res, next) => {
-  passport.authenticate('local', async (error, user) => {
+app.post('/api/auth/login', loginLimiter, (req, res, next) => {
+  if (typeof req.body.email === 'string') {
+    req.body.email = req.body.email.toLowerCase();
+  }
+
+  passport.authenticate('local', (error, user) => {
     if (error || !user) {
       return res.status(400).json({ message: 'Invalid credentials.' });
     }
 
-    req.login(user, async (loginError) => {
+    req.login(user, (loginError) => {
       if (loginError) {
         return res.status(500).json({ message: 'Login failed.' });
       }
 
-      const { inviteToken } = await claimPendingInvite(req, user.id);
-
-      return res.json({
-        user: { id: user.id, email: user.email, username: user.username },
-        pendingInviteToken: inviteToken || null,
-      });
+      claimPendingInvite(req, user.id)
+        .then(({ inviteToken }) => {
+          res.json({
+            user: { id: user.id, email: user.email, username: user.username },
+            pendingInviteToken: inviteToken || null,
+          });
+        })
+        .catch(() => {
+          res.status(500).json({ message: 'Failed to complete login.' });
+        });
     });
   })(req, res, next);
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  req.logout(() => {
-    req.session.destroy(() => {
+  req.logout((logoutError) => {
+    if (logoutError) {
+      return res.status(500).json({ message: 'Logout failed.' });
+    }
+
+    req.session.destroy((destroyError) => {
+      if (destroyError) {
+        return res.status(500).json({ message: 'Logout failed.' });
+      }
+
       res.json({ ok: true });
     });
   });
@@ -199,7 +253,7 @@ app.get('/api/auth/google/callback', passport.authenticate('google', { failureRe
   return res.redirect(`${clientUrl}/dashboard`);
 });
 
-app.get('/api/join/:inviteToken', async (req, res) => {
+app.get('/api/join/:inviteToken', joinLimiter, async (req, res) => {
   const game = unwrap(await supabase.from('Game').select('*').eq('inviteToken', req.params.inviteToken).maybeSingle());
   if (!game) {
     return res.status(404).json({ message: 'Invite link is invalid.' });
@@ -287,7 +341,7 @@ app.post('/api/games', requireAuth, async (req, res) => {
   });
 });
 
-app.post('/api/games/join', requireAuth, async (req, res) => {
+app.post('/api/games/join', requireAuth, joinLimiter, async (req, res) => {
   const code = String(req.body.code || '').trim().toUpperCase();
   const game = unwrap(await supabase.from('Game').select('*').eq('code', code).maybeSingle());
   if (!game) {
@@ -305,7 +359,11 @@ app.get('/api/games/:gameId', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Not part of this game.' });
   }
 
-  const { game, memberships, rounds, emailSettings, scoreMap, medalMap } = await getGameDetail(supabase, req.params.gameId);
+  const detail = await getGameDetail(supabase, req.params.gameId);
+  if (!detail) {
+    return res.status(404).json({ message: 'Game not found.' });
+  }
+  const { game, memberships, rounds, emailSettings, scoreMap, medalMap } = detail;
 
   const activeRound = rounds.find((round) => round.status === 'ACTIVE') || null;
   const pastRounds = rounds.filter((round) => round.status === 'CLOSED');
@@ -395,7 +453,7 @@ app.post('/api/games/:gameId/active-round/save', requireAuth, async (req, res) =
   }
 
   const questions = unwrap(await supabase.from('Question').select('*').eq('roundId', round.id));
-  const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
+  const answers = Array.isArray(req.body.answers) ? req.body.answers.slice(0, 50) : [];
   const validQuestionIds = new Set(questions.map((question) => question.id));
 
   for (const row of answers) {
@@ -404,7 +462,7 @@ app.post('/api/games/:gameId/active-round/save', requireAuth, async (req, res) =
       continue;
     }
 
-    const answer = String(row.answer || '').trim();
+    const answer = String(row.answer || '').trim().slice(0, 500);
     if (!answer) {
       continue;
     }
@@ -481,9 +539,14 @@ app.post('/api/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, 
         announcementEmail: announcement,
       })
       .eq('id', req.params.roundId)
+      .eq('gameId', req.params.gameId)
       .select()
-      .single(),
+      .maybeSingle(),
   );
+
+  if (!round) {
+    return res.status(404).json({ message: 'Round not found.' });
+  }
 
   const game = unwrap(await supabase.from('Game').select('*').eq('id', round.gameId).maybeSingle());
   const emailSettings = unwrap(
@@ -537,7 +600,7 @@ app.put('/api/games/:gameId/email-settings', requireAuth, async (req, res) => {
   res.json({ settings });
 });
 
-app.post('/api/games/:gameId/email/manual', requireAuth, async (req, res) => {
+app.post('/api/games/:gameId/email/manual', requireAuth, emailLimiter, async (req, res) => {
   const role = await getRole(req.params.gameId, req.user.id);
   if (role !== 'ADMIN') {
     return res.status(403).json({ message: 'Admin only.' });
@@ -571,7 +634,11 @@ app.get('/api/games/:gameId/rounds/:roundId/results', requireAuth, async (req, r
 
   await processRounds(supabase);
 
-  const { round, game, scores, questions } = await getRoundResults(supabase, req.params.roundId, req.user.id);
+  const detail = await getRoundResults(supabase, req.params.roundId, req.params.gameId, req.user.id);
+  if (!detail) {
+    return res.status(404).json({ message: 'Round not found.' });
+  }
+  const { round, game, scores, questions } = detail;
 
   const ownScoreRow = scores.find((score) => score.userId === req.user.id);
   const ownScore = ownScoreRow
@@ -601,13 +668,18 @@ app.get('/api/games/:gameId/rounds/:roundId/results', requireAuth, async (req, r
 });
 
 app.use(express.static(path.join(root, 'dist')));
+
+app.use('/api', (_req, res) => {
+  res.status(404).json({ message: 'Not found.' });
+});
+
 app.use((_req, res) => {
   res.sendFile(path.join(root, 'dist', 'index.html'));
 });
 
 app.use((error, _req, res, _next) => {
   console.error('[server]', error);
-  res.status(500).json({ message: 'Something went wrong. Please try again.' });
+  res.status(error.status || 500).json({ message: 'Something went wrong. Please try again.' });
 });
 
 app.listen(port, async () => {

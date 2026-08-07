@@ -6,11 +6,19 @@ import { getRoundsForClosing, getActiveRoundsWithContext } from './repository.js
 import { unwrap } from './db.js';
 
 async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, recipient, emailType, subject, intro, gameName }) {
-  const exists = unwrap(
-    await supabase.from('EmailDeliveryLog').select('*').eq('dedupeKey', dedupeKey).maybeSingle(),
-  );
-  if (exists) {
-    return;
+  const { error: insertError } = await supabase.from('EmailDeliveryLog').insert({
+    dedupeKey,
+    gameId,
+    roundId,
+    recipientId: recipient.id,
+    emailType,
+  });
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      return;
+    }
+    throw new Error(insertError.message);
   }
 
   await sendEmail({
@@ -19,19 +27,27 @@ async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, recipient, 
     intro,
     gameName,
   });
-
-  unwrap(
-    await supabase.from('EmailDeliveryLog').insert({
-      dedupeKey,
-      gameId,
-      roundId,
-      recipientId: recipient.id,
-      emailType,
-    }),
-  );
 }
 
+let inFlightProcessRounds = null;
+
 export async function processRounds(supabase) {
+  if (inFlightProcessRounds) {
+    return inFlightProcessRounds;
+  }
+
+  inFlightProcessRounds = runProcessRounds(supabase).finally(() => {
+    inFlightProcessRounds = null;
+  });
+
+  return inFlightProcessRounds;
+}
+
+export async function sweepExpiredSessions(supabase) {
+  unwrap(await supabase.from('Session').delete().lt('expiresAt', new Date().toISOString()));
+}
+
+async function runProcessRounds(supabase) {
   const now = new Date();
 
   const roundsToClose = await getRoundsForClosing(supabase, now);
@@ -106,6 +122,7 @@ export function startRoundScheduler(supabase) {
   setInterval(async () => {
     try {
       await processRounds(supabase);
+      await sweepExpiredSessions(supabase);
     } catch (error) {
       console.error('[scheduler]', error);
     }

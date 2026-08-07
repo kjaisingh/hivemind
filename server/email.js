@@ -14,12 +14,21 @@ const transporter = hasSmtp
     })
   : null;
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildEmail(subject, intro, gameName, ctaLink) {
   return `
     <div style="font-family: Inter, Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #121212;">
-      <h2>${subject}</h2>
-      <p>${intro}</p>
-      <p>You are receiving this because you are part of <strong>${gameName}</strong>.</p>
+      <h2>${escapeHtml(subject)}</h2>
+      <p>${escapeHtml(intro)}</p>
+      <p>You are receiving this because you are part of <strong>${escapeHtml(gameName)}</strong>.</p>
       <p><a href="${ctaLink}" style="display:inline-block;padding:10px 16px;background:#1f7aec;color:white;border-radius:8px;text-decoration:none;">Open Hivemind</a></p>
       <p style="font-size:12px;color:#666;">Hivemind: where your best answer is the answer everyone else guessed too.</p>
     </div>
