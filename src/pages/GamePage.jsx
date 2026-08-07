@@ -1,32 +1,37 @@
 import dayjs from 'dayjs';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 
 const tabs = ['active', 'leaderboard', 'history', 'share', 'manage'];
 
-function Countdown({ expiresAt }) {
-  const [label, setLabel] = useState('');
+function Countdown({ expiresAt, onExpire }) {
+  const [label, setLabel] = useState(null);
 
   useEffect(() => {
     function tick() {
       const diff = dayjs(expiresAt).diff(dayjs(), 'second');
       if (diff <= 0) {
         setLabel('Round closed');
+        onExpire?.();
         return;
       }
       const hours = Math.floor(diff / 3600);
       const minutes = Math.floor((diff % 3600) / 60);
       const seconds = diff % 60;
-      setLabel(`${hours}h ${minutes}m ${seconds}s left`);
+      const parts = [];
+      if (hours > 0) parts.push(`${hours}h`);
+      if (hours > 0 || minutes > 0) parts.push(`${minutes}m`);
+      parts.push(`${seconds}s`);
+      setLabel(`${parts.join(' ')} left`);
     }
 
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [expiresAt]);
+  }, [expiresAt, onExpire]);
 
-  return <p className="pill">{label}</p>;
+  return <p className="pill" aria-live="polite">{label ?? 'Loading time remaining...'}</p>;
 }
 
 export default function GamePage() {
@@ -53,6 +58,14 @@ export default function GamePage() {
     expiringHours: [24, 1],
   });
   const [manualEmail, setManualEmail] = useState({ subject: '', message: '' });
+  const [roundExpired, setRoundExpired] = useState(false);
+  const [savingAnswers, setSavingAnswers] = useState(false);
+  const [creatingRound, setCreatingRound] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [savingEmailSettings, setSavingEmailSettings] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
 
   async function loadGame() {
     const data = await api(`/api/games/${gameId}`);
@@ -84,6 +97,10 @@ export default function GamePage() {
     loadGame().catch((loadError) => setError(loadError.message));
   }, [gameId]);
 
+  useEffect(() => {
+    setRoundExpired(false);
+  }, [game?.activeRound?.id]);
+
   const visibleTabs = useMemo(
     () => tabs.filter((tab) => tab !== 'manage' || game?.role === 'ADMIN'),
     [game?.role],
@@ -91,42 +108,65 @@ export default function GamePage() {
 
   async function saveAnswers() {
     setStatus('Saving answers...');
-    await api(`/api/games/${gameId}/active-round/save`, {
-      method: 'POST',
-      body: JSON.stringify({
-        answers: Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer })),
-      }),
-    });
-    setStatus('Answers saved. You can edit until the round expires.');
-    await loadGame();
+    setError('');
+    setSavingAnswers(true);
+    try {
+      await api(`/api/games/${gameId}/active-round/save`, {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer })),
+        }),
+      });
+      setStatus('Answers saved. You can edit until the round expires.');
+      await loadGame();
+    } catch (saveError) {
+      setStatus('');
+      setError(saveError.message);
+    } finally {
+      setSavingAnswers(false);
+    }
   }
 
   async function createRound(event) {
     event.preventDefault();
     setError('');
 
+    const startsAtDate = new Date(roundForm.startsAt);
+    const expiresAtDate = new Date(roundForm.expiresAt);
+    if (Number.isNaN(startsAtDate.getTime()) || Number.isNaN(expiresAtDate.getTime())) {
+      setError('Enter valid start and expiry times.');
+      return;
+    }
+
     const payload = {
       ...roundForm,
-      startsAt: new Date(roundForm.startsAt).toISOString(),
-      expiresAt: new Date(roundForm.expiresAt).toISOString(),
+      startsAt: startsAtDate.toISOString(),
+      expiresAt: expiresAtDate.toISOString(),
       questions: roundForm.questions.map((question) => question.trim()).filter(Boolean),
     };
 
-    await api(`/api/games/${gameId}/rounds`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    setCreatingRound(true);
+    try {
+      await api(`/api/games/${gameId}/rounds`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
 
-    setRoundForm({
-      name: '',
-      description: '',
-      startsAt: '',
-      expiresAt: '',
-      questions: ['', ''],
-    });
+      setRoundForm({
+        name: '',
+        description: '',
+        startsAt: '',
+        expiresAt: '',
+        questions: ['', ''],
+      });
 
-    await loadGame();
-    setStatus('Round draft created. Publish it from the section below.');
+      await loadGame();
+      setStatus('Round draft created. Publish it from the section below.');
+    } catch (createError) {
+      setError(createError.message);
+    } finally {
+      setCreatingRound(false);
+    }
   }
 
   async function publishRound(event) {
@@ -135,37 +175,59 @@ export default function GamePage() {
       return;
     }
 
-    await api(`/api/games/${gameId}/rounds/${draftToPublish}/publish`, {
-      method: 'POST',
-      body: JSON.stringify({ announcement }),
-    });
+    setError('');
+    setPublishing(true);
+    try {
+      await api(`/api/games/${gameId}/rounds/${draftToPublish}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({ announcement }),
+      });
 
-    setStatus('Round published. Emails were sent based on your settings.');
-    await loadGame();
+      setStatus('Round published. Emails were sent based on your settings.');
+      await loadGame();
+    } catch (publishError) {
+      setError(publishError.message);
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function saveEmailSettings(event) {
     event.preventDefault();
+    setError('');
+    setSavingEmailSettings(true);
+    try {
+      await api(`/api/games/${gameId}/email-settings`, {
+        method: 'PUT',
+        body: JSON.stringify(emailSettings),
+      });
 
-    await api(`/api/games/${gameId}/email-settings`, {
-      method: 'PUT',
-      body: JSON.stringify(emailSettings),
-    });
-
-    setStatus('Email settings updated.');
-    await loadGame();
+      setStatus('Email settings updated.');
+      await loadGame();
+    } catch (settingsError) {
+      setError(settingsError.message);
+    } finally {
+      setSavingEmailSettings(false);
+    }
   }
 
   async function sendManualEmail(event) {
     event.preventDefault();
+    setError('');
+    setSendingEmail(true);
+    try {
+      await api(`/api/games/${gameId}/email/manual`, {
+        method: 'POST',
+        body: JSON.stringify(manualEmail),
+      });
 
-    await api(`/api/games/${gameId}/email/manual`, {
-      method: 'POST',
-      body: JSON.stringify(manualEmail),
-    });
-
-    setManualEmail({ subject: '', message: '' });
-    setStatus('Email sent to all players in this game.');
+      setManualEmail({ subject: '', message: '' });
+      setStatus('Email sent to all players in this game.');
+    } catch (emailError) {
+      setError(emailError.message);
+    } finally {
+      setSendingEmail(false);
+    }
   }
 
   function toggleHour(value) {
@@ -176,6 +238,10 @@ export default function GamePage() {
         expiringHours: has ? prev.expiringHours.filter((item) => item !== value) : [...prev.expiringHours, value],
       };
     });
+  }
+
+  if (error && !game) {
+    return <div className="page"><p className="error" role="alert">{error}</p></div>;
   }
 
   if (!game) {
@@ -221,7 +287,7 @@ export default function GamePage() {
                   <h2>{game.activeRound.name}</h2>
                   <p>{game.activeRound.description}</p>
                 </div>
-                <Countdown expiresAt={game.activeRound.expiresAt} />
+                <Countdown expiresAt={game.activeRound.expiresAt} onExpire={handleRoundExpire} />
               </div>
 
               {game.activeRound.questions.map((question) => (
@@ -231,11 +297,14 @@ export default function GamePage() {
                     value={answers[question.id] || ''}
                     onChange={(event) => setAnswers((prev) => ({ ...prev, [question.id]: event.target.value }))}
                     placeholder="Your answer"
+                    disabled={roundExpired}
                   />
                 </label>
               ))}
 
-              <button className="button" type="button" onClick={saveAnswers}>Save</button>
+              <button className="button" type="button" onClick={saveAnswers} disabled={roundExpired || savingAnswers}>
+                {savingAnswers ? 'Saving...' : 'Save'}
+              </button>
             </>
           )}
         </section>
@@ -255,14 +324,18 @@ export default function GamePage() {
                 </tr>
               </thead>
               <tbody>
-                {game.leaderboard.map((row) => (
-                  <tr key={row.userId}>
-                    <td>{row.rank}</td>
-                    <td>{row.username}</td>
-                    <td>{row.points}</td>
-                    <td>{'🥇'.repeat(row.medals)}</td>
-                  </tr>
-                ))}
+                {game.leaderboard.length === 0 ? (
+                  <tr><td colSpan={4}>No scores yet.</td></tr>
+                ) : (
+                  game.leaderboard.map((row) => (
+                    <tr key={row.userId}>
+                      <td>{row.rank}</td>
+                      <td>{row.username}</td>
+                      <td>{row.points}</td>
+                      <td>{'🥇'.repeat(row.medals)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -300,8 +373,8 @@ export default function GamePage() {
           <div className="card stack">
             <h2>Create Round</h2>
             <form className="stack" onSubmit={createRound}>
-              <input placeholder="Round name" value={roundForm.name} onChange={(event) => setRoundForm((prev) => ({ ...prev, name: event.target.value }))} required />
-              <textarea placeholder="Round description" value={roundForm.description} onChange={(event) => setRoundForm((prev) => ({ ...prev, description: event.target.value }))} />
+              <input aria-label="Round name" placeholder="Round name" value={roundForm.name} onChange={(event) => setRoundForm((prev) => ({ ...prev, name: event.target.value }))} required />
+              <textarea aria-label="Round description" placeholder="Round description" value={roundForm.description} onChange={(event) => setRoundForm((prev) => ({ ...prev, description: event.target.value }))} />
               <label className="stack">
                 <span>Start date/time</span>
                 <input type="datetime-local" value={roundForm.startsAt} onChange={(event) => setRoundForm((prev) => ({ ...prev, startsAt: event.target.value }))} required />
@@ -314,8 +387,9 @@ export default function GamePage() {
               <div className="stack">
                 <strong>Questions</strong>
                 {roundForm.questions.map((question, index) => (
-                  <div className="row" key={index}>
+                  <div className="row question-row" key={index}>
                     <input
+                      aria-label={`Question ${index + 1}`}
                       placeholder={`Question ${index + 1}`}
                       value={question}
                       onChange={(event) => {
@@ -328,6 +402,7 @@ export default function GamePage() {
                     <button
                       type="button"
                       className="button button-secondary"
+                      aria-label={`Remove question ${index + 1}`}
                       onClick={() => {
                         setRoundForm((prev) => ({
                           ...prev,
@@ -345,7 +420,7 @@ export default function GamePage() {
               <button type="button" className="button button-secondary" onClick={() => setRoundForm((prev) => ({ ...prev, questions: [...prev.questions, ''] }))}>
                 Add Question
               </button>
-              <button type="submit" className="button">Create Draft</button>
+              <button type="submit" className="button" disabled={creatingRound}>{creatingRound ? 'Creating...' : 'Create Draft'}</button>
             </form>
           </div>
 
@@ -364,7 +439,7 @@ export default function GamePage() {
                 onChange={(event) => setAnnouncement(event.target.value)}
                 required
               />
-              <button className="button" type="submit">Publish</button>
+              <button className="button" type="submit" disabled={publishing || !draftToPublish}>{publishing ? 'Publishing...' : 'Publish'}</button>
             </form>
 
             <h2>Email Automation</h2>
@@ -384,21 +459,21 @@ export default function GamePage() {
                 <label className="row"><input type="checkbox" checked={emailSettings.expiringHours.includes(6)} onChange={() => toggleHour(6)} /> 6 hours</label>
                 <label className="row"><input type="checkbox" checked={emailSettings.expiringHours.includes(1)} onChange={() => toggleHour(1)} /> 1 hour</label>
               </div>
-              <button className="button" type="submit">Save Email Settings</button>
+              <button className="button" type="submit" disabled={savingEmailSettings}>{savingEmailSettings ? 'Saving...' : 'Save Email Settings'}</button>
             </form>
 
             <h2>Manual Mass Email</h2>
             <form className="stack" onSubmit={sendManualEmail}>
-              <input placeholder="Subject" value={manualEmail.subject} onChange={(event) => setManualEmail((prev) => ({ ...prev, subject: event.target.value }))} required />
-              <textarea placeholder="Message" value={manualEmail.message} onChange={(event) => setManualEmail((prev) => ({ ...prev, message: event.target.value }))} required />
-              <button className="button" type="submit">Send Email</button>
+              <input aria-label="Subject" placeholder="Subject" value={manualEmail.subject} onChange={(event) => setManualEmail((prev) => ({ ...prev, subject: event.target.value }))} required />
+              <textarea aria-label="Message" placeholder="Message" value={manualEmail.message} onChange={(event) => setManualEmail((prev) => ({ ...prev, message: event.target.value }))} required />
+              <button className="button" type="submit" disabled={sendingEmail}>{sendingEmail ? 'Sending...' : 'Send Email'}</button>
             </form>
           </div>
         </section>
       )}
 
-      {status && <p className="success">{status}</p>}
-      {error && <p className="error">{error}</p>}
+      {status && <p className="success" role="status">{status}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
     </div>
   );
 }

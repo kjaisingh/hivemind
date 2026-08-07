@@ -57,9 +57,13 @@ export default function DashboardPage() {
   }
 
   async function logout() {
-    await api('/api/auth/logout', { method: 'POST' });
-    setUser(null);
-    navigate('/');
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+      setUser(null);
+      navigate('/');
+    } catch (logoutError) {
+      setError(logoutError.message);
+    }
   }
 
   return (
@@ -126,6 +130,7 @@ export default function DashboardPage() {
 
       <section className="card">
         <h2>Active Games</h2>
+        {games.length === 0 ? <p>No games yet. Create one or join with a code.</p> : (
         <div className="stack">
           {games.map((game) => (
             <button key={game.id} type="button" className="game-card" onClick={() => navigate(`/games/${game.id}`)}>
@@ -138,6 +143,7 @@ export default function DashboardPage() {
             </button>
           ))}
         </div>
+        )}
       </section>
 
       <section className="card">
@@ -154,7 +160,7 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
     </div>
   );
 }

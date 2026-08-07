@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    refresh().finally(() => setLoading(false));
+    refresh().catch(() => setUser(null)).finally(() => setLoading(false));
   }, []);
 
   const value = useMemo(() => ({
