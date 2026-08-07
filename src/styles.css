@@ -370,6 +370,15 @@ td {
   height: 260px;
 }
 
+.own-row {
+  background: var(--color-primary-tint);
+}
+
+.score-headline {
+  font-size: var(--font-size-h2);
+  font-weight: 700;
+}
+
 @media (max-width: 640px) {
   .page {
     padding: var(--space-18) var(--space-12) var(--space-30);

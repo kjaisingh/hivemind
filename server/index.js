@@ -657,6 +657,7 @@ app.get('/api/games/:gameId/rounds/:roundId/results', requireAuth, async (req, r
         username: score.user.username,
         totalScore: score.totalScore,
         rank: score.rank,
+        medalAwarded: score.medalAwarded,
       })),
       questions: questions.map((question) => ({
         id: question.id,
