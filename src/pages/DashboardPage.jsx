@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { getUrgencyTier, formatTimeRemaining, urgencyPillClass } from '../lib/countdown';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ export default function DashboardPage() {
   const [createForm, setCreateForm] = useState({ name: '', description: '' });
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
+  const [now, setNow] = useState(() => Date.now());
 
   async function loadDashboard() {
     const data = await api('/api/dashboard');
@@ -18,6 +20,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard().catch((loadError) => setError(loadError.message));
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
   }, []);
 
   const pendingAlerts = useMemo(() => games.filter((game) => game.hasPendingSubmission), [games]);
@@ -139,7 +146,11 @@ export default function DashboardPage() {
                 <p>{game.description}</p>
                 <p className="small">Code: {game.code} • Role: {game.role}</p>
               </div>
-              {game.hasPendingSubmission && <span className="pill">Needs your answers</span>}
+              {game.hasPendingSubmission && (
+                <span className={urgencyPillClass(game.activeRound ? getUrgencyTier(game.activeRound.expiresAt, now) : 'normal')}>
+                  Needs your answers{game.activeRound ? ` — ${formatTimeRemaining(game.activeRound.expiresAt, now)}` : ''}
+                </span>
+              )}
             </button>
           ))}
         </div>

@@ -2,15 +2,18 @@ import dayjs from 'dayjs';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { getUrgencyTier, urgencyPillClass } from '../lib/countdown';
 
 const tabs = ['active', 'leaderboard', 'history', 'share', 'manage'];
 
 function Countdown({ expiresAt, onExpire }) {
   const [label, setLabel] = useState(null);
+  const [tier, setTier] = useState('normal');
 
   useEffect(() => {
     function tick() {
       const diff = dayjs(expiresAt).diff(dayjs(), 'second');
+      setTier(getUrgencyTier(expiresAt));
       if (diff <= 0) {
         setLabel('Round closed');
         onExpire?.();
@@ -31,7 +34,7 @@ function Countdown({ expiresAt, onExpire }) {
     return () => clearInterval(timer);
   }, [expiresAt, onExpire]);
 
-  return <p className="pill" aria-live="polite">{label ?? 'Loading time remaining...'}</p>;
+  return <p className={urgencyPillClass(tier)} aria-live="polite">{label ?? 'Loading time remaining...'}</p>;
 }
 
 export default function GamePage() {

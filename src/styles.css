@@ -25,6 +25,10 @@
   --color-success-bg: #f0fdf4;
   --color-success-border: #bbf7d0;
 
+  --color-warning: #b45309;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+
   --color-highlight: #fef3c7;
 
   --radius-sm: 6px;
@@ -311,6 +315,16 @@ textarea {
   padding: var(--space-3) var(--space-10);
   font-size: 0.8rem;
   width: fit-content;
+}
+
+.pill-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.pill-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .tab-row {
