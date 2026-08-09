@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getUrgencyTier, urgencyPillClass } from '../lib/countdown';
@@ -78,9 +78,12 @@ export default function GamePage() {
   const [promotingSuggestionId, setPromotingSuggestionId] = useState(null);
 
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
+  const loadGameRequestRef = useRef(0);
 
   async function loadGame() {
+    const requestId = ++loadGameRequestRef.current;
     const data = await api(`/api/games/${gameId}`);
+    if (requestId !== loadGameRequestRef.current) return;
     setGame(data.game);
 
     if (data.game.activeRound) {
@@ -107,9 +110,10 @@ export default function GamePage() {
     if (data.game.role === 'ADMIN') {
       try {
         const suggestionData = await api(`/api/games/${gameId}/suggestions`);
+        if (requestId !== loadGameRequestRef.current) return;
         setSuggestions(suggestionData.suggestions);
       } catch {
-        setSuggestions([]);
+        if (requestId === loadGameRequestRef.current) setSuggestions([]);
       }
     } else {
       setSuggestions([]);

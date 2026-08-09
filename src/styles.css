@@ -219,6 +219,11 @@ select {
   background: var(--color-surface);
 }
 
+input[type='checkbox'] {
+  width: auto;
+  padding: 0;
+}
+
 textarea {
   min-height: 92px;
   resize: vertical;

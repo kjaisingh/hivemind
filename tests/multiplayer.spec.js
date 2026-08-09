@@ -82,7 +82,7 @@ test('two players who answer identically tie for rank 1 and both earn a medal', 
   await expect(adminPage.getByRole('cell', { name: admin.username })).toBeVisible();
   await expect(adminPage.getByRole('cell', { name: player.username })).toBeVisible();
 
-  // Confirm the underlying data contract too, since the UI doesn't surface medalAwarded yet.
+  // Confirm the underlying data contract too, beyond what the medal emoji in the UI implies.
   const resultsJson = await adminPage.request
     .get(`${API_ORIGIN}/api/games/${gameId}/rounds/${roundId}/results`)
     .then((r) => r.json());
