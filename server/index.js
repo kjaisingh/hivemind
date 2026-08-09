@@ -420,8 +420,10 @@ app.get('/api/games/:gameId', requireAuth, async (req, res) => {
       draftRounds: draftRounds.map((round) => ({
         id: round.id,
         name: round.name,
+        description: round.description,
         startsAt: round.startsAt,
         expiresAt: round.expiresAt,
+        questions: round.questions.map((question) => question.prompt),
       })),
       emailSettings,
     },
@@ -522,6 +524,86 @@ app.post('/api/games/:gameId/rounds', requireAuth, async (req, res) => {
   );
 
   res.json({ roundId: round.id });
+});
+
+app.put('/api/games/:gameId/rounds/:roundId', requireAuth, async (req, res) => {
+  const role = await getRole(req.params.gameId, req.user.id);
+  if (role !== 'ADMIN') {
+    return res.status(403).json({ message: 'Admin only.' });
+  }
+
+  const parsed = roundSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid round data.' });
+  }
+
+  const existing = unwrap(
+    await supabase
+      .from('Round')
+      .select('*')
+      .eq('id', req.params.roundId)
+      .eq('gameId', req.params.gameId)
+      .maybeSingle(),
+  );
+  if (!existing) {
+    return res.status(404).json({ message: 'Round not found.' });
+  }
+  if (existing.status !== 'DRAFT') {
+    return res.status(400).json({ message: 'Only draft rounds can be edited.' });
+  }
+
+  const round = unwrap(
+    await supabase
+      .from('Round')
+      .update({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        startsAt: new Date(parsed.data.startsAt).toISOString(),
+        expiresAt: new Date(parsed.data.expiresAt).toISOString(),
+      })
+      .eq('id', req.params.roundId)
+      .select()
+      .single(),
+  );
+
+  unwrap(await supabase.from('Question').delete().eq('roundId', round.id));
+  unwrap(
+    await supabase.from('Question').insert(
+      parsed.data.questions.map((question, index) => ({
+        roundId: round.id,
+        prompt: question,
+        position: index + 1,
+      })),
+    ),
+  );
+
+  res.json({ roundId: round.id });
+});
+
+app.delete('/api/games/:gameId/rounds/:roundId', requireAuth, async (req, res) => {
+  const role = await getRole(req.params.gameId, req.user.id);
+  if (role !== 'ADMIN') {
+    return res.status(403).json({ message: 'Admin only.' });
+  }
+
+  const existing = unwrap(
+    await supabase
+      .from('Round')
+      .select('*')
+      .eq('id', req.params.roundId)
+      .eq('gameId', req.params.gameId)
+      .maybeSingle(),
+  );
+  if (!existing) {
+    return res.status(404).json({ message: 'Round not found.' });
+  }
+  if (existing.status !== 'DRAFT') {
+    return res.status(400).json({ message: 'Only draft rounds can be deleted.' });
+  }
+
+  unwrap(await supabase.from('Round').delete().eq('id', req.params.roundId));
+
+  res.json({ ok: true });
 });
 
 app.post('/api/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, res) => {

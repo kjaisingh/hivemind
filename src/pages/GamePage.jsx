@@ -68,6 +68,8 @@ export default function GamePage() {
   const [savingEmailSettings, setSavingEmailSettings] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [remindingPlayers, setRemindingPlayers] = useState(false);
+  const [editingRoundId, setEditingRoundId] = useState(null);
+  const [deletingRoundId, setDeletingRoundId] = useState(null);
 
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
 
@@ -131,7 +133,57 @@ export default function GamePage() {
     }
   }
 
-  async function createRound(event) {
+  function resetRoundForm() {
+    setEditingRoundId(null);
+    setRoundForm({
+      name: '',
+      description: '',
+      startsAt: '',
+      expiresAt: '',
+      questions: ['', ''],
+    });
+  }
+
+  function startEditRound(round) {
+    setEditingRoundId(round.id);
+    setRoundForm({
+      name: round.name,
+      description: round.description || '',
+      startsAt: dayjs(round.startsAt).format('YYYY-MM-DDTHH:mm'),
+      expiresAt: dayjs(round.expiresAt).format('YYYY-MM-DDTHH:mm'),
+      questions: round.questions.length > 0 ? round.questions : ['', ''],
+    });
+    setError('');
+    setStatus('');
+  }
+
+  async function deleteRound(round) {
+    if (!window.confirm(`Delete draft round "${round.name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    setError('');
+    setDeletingRoundId(round.id);
+    try {
+      await api(`/api/games/${gameId}/rounds/${round.id}`, { method: 'DELETE' });
+
+      if (editingRoundId === round.id) {
+        resetRoundForm();
+      }
+      if (draftToPublish === round.id) {
+        setDraftToPublish('');
+      }
+
+      setStatus('Draft round deleted.');
+      await loadGame();
+    } catch (deleteError) {
+      setError(deleteError.message);
+    } finally {
+      setDeletingRoundId(null);
+    }
+  }
+
+  async function submitRoundForm(event) {
     event.preventDefault();
     setError('');
 
@@ -151,23 +203,24 @@ export default function GamePage() {
 
     setCreatingRound(true);
     try {
-      await api(`/api/games/${gameId}/rounds`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+      if (editingRoundId) {
+        await api(`/api/games/${gameId}/rounds/${editingRoundId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        setStatus('Round draft updated.');
+      } else {
+        await api(`/api/games/${gameId}/rounds`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        setStatus('Round draft created. Publish it from the section below.');
+      }
 
-      setRoundForm({
-        name: '',
-        description: '',
-        startsAt: '',
-        expiresAt: '',
-        questions: ['', ''],
-      });
-
+      resetRoundForm();
       await loadGame();
-      setStatus('Round draft created. Publish it from the section below.');
-    } catch (createError) {
-      setError(createError.message);
+    } catch (submitError) {
+      setError(submitError.message);
     } finally {
       setCreatingRound(false);
     }
@@ -407,8 +460,8 @@ export default function GamePage() {
       {activeTab === 'manage' && game.role === 'ADMIN' && (
         <section className="grid-two">
           <div className="card stack">
-            <h2>Create Round</h2>
-            <form className="stack" onSubmit={createRound}>
+            <h2>{editingRoundId ? 'Edit Draft Round' : 'Create Round'}</h2>
+            <form className="stack" onSubmit={submitRoundForm}>
               <input aria-label="Round name" placeholder="Round name" value={roundForm.name} onChange={(event) => setRoundForm((prev) => ({ ...prev, name: event.target.value }))} required />
               <textarea aria-label="Round description" placeholder="Round description" value={roundForm.description} onChange={(event) => setRoundForm((prev) => ({ ...prev, description: event.target.value }))} />
               <label className="stack">
@@ -456,12 +509,50 @@ export default function GamePage() {
               <button type="button" className="button button-secondary" onClick={() => setRoundForm((prev) => ({ ...prev, questions: [...prev.questions, ''] }))}>
                 Add Question
               </button>
-              <button type="submit" className="button" disabled={creatingRound}>{creatingRound ? 'Creating...' : 'Create Draft'}</button>
+              <div className="row">
+                <button type="submit" className="button" disabled={creatingRound}>
+                  {creatingRound ? (editingRoundId ? 'Saving...' : 'Creating...') : (editingRoundId ? 'Save Changes' : 'Create Draft')}
+                </button>
+                {editingRoundId && (
+                  <button type="button" className="button button-secondary" onClick={resetRoundForm}>
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
           <div className="card stack">
             <h2>Publish Round</h2>
+            {draftRounds.length > 0 && (
+              <div className="stack">
+                <strong>Draft rounds</strong>
+                {draftRounds.map((round) => (
+                  <div key={round.id} className="list-item">
+                    <span>{round.name}</span>
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        aria-label={`Edit ${round.name}`}
+                        onClick={() => startEditRound(round)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        aria-label={`Delete ${round.name}`}
+                        onClick={() => deleteRound(round)}
+                        disabled={deletingRoundId === round.id}
+                      >
+                        {deletingRoundId === round.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <form className="stack" onSubmit={publishRound}>
               <select value={draftToPublish} onChange={(event) => setDraftToPublish(event.target.value)}>
                 <option value="">Select draft round</option>
