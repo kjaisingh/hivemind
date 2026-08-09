@@ -11,13 +11,7 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 
 
 ## Feature Backlog
-- Enable sending player-suggested questions to admins.
 - Image/media support for questions.
-- Visual countdown timer showing when the active round expires.
-- Automated email triggers to notify players when rounds open, are about to close, or when results are ready.
-- One-click admin reminders to nudge players who haven't submitted their answers yet.
-- Profile badges for players who placed first in previous individual rounds.
-- Draft mode for admins to build and save upcoming rounds.
 - Seasonal reset button to archive the current leaderboard and start a fresh season without needing a new invite link.
 - LLM-based answer normalization to automatically merge minor typos or semantic variations.
 - LLM-based answer clustering to automatically group similar responses together.
@@ -56,7 +50,7 @@ Then open:
 - Backend API: `http://localhost:3001/api/health`
 
 ### Demo Accounts
-All demo users use password `password123`:
+All demo users share one password, set via `DEMO_PASSWORD` in `.env` (if unset, `npm run setup` generates one and prints it once — save it):
 - `demo@hivemind.app` (admin of demo game)
 - `amy@hivemind.app`
 - `raj@hivemind.app`
@@ -86,6 +80,7 @@ Redeploy after updating variables.
 ## Scripts
 - `npm run setup` → seed demo data (run `supabase/schema.sql` in Supabase first).
 - `npm run dev` → run server and client together.
+- `npm test` → run the Playwright end-to-end suite (starts its own dev server; see `playwright.config.js`).
 - `npm run build` → production frontend build.
 - `npm start` → run production server.
 

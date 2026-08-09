@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getUrgencyTier, urgencyPillClass } from '../lib/countdown';
 
-const tabs = ['active', 'leaderboard', 'history', 'share', 'manage'];
+const tabs = ['active', 'leaderboard', 'history', 'share', 'suggest', 'manage'];
 
 function Countdown({ expiresAt, onExpire }) {
   const [label, setLabel] = useState(null);
@@ -70,6 +70,12 @@ export default function GamePage() {
   const [remindingPlayers, setRemindingPlayers] = useState(false);
   const [editingRoundId, setEditingRoundId] = useState(null);
   const [deletingRoundId, setDeletingRoundId] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionPrompt, setSuggestionPrompt] = useState('');
+  const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
+  const [promoteTargets, setPromoteTargets] = useState({});
+  const [dismissingSuggestionId, setDismissingSuggestionId] = useState(null);
+  const [promotingSuggestionId, setPromotingSuggestionId] = useState(null);
 
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
 
@@ -96,6 +102,17 @@ export default function GamePage() {
           .map((value) => Number(value.trim()))
           .filter((value) => Number.isFinite(value) && value > 0),
       });
+    }
+
+    if (data.game.role === 'ADMIN') {
+      try {
+        const suggestionData = await api(`/api/games/${gameId}/suggestions`);
+        setSuggestions(suggestionData.suggestions);
+      } catch {
+        setSuggestions([]);
+      }
+    } else {
+      setSuggestions([]);
     }
   }
 
@@ -307,6 +324,65 @@ export default function GamePage() {
     }
   }
 
+  async function submitSuggestion(event) {
+    event.preventDefault();
+    setError('');
+    setSubmittingSuggestion(true);
+    try {
+      await api(`/api/games/${gameId}/suggestions`, {
+        method: 'POST',
+        body: JSON.stringify({ prompt: suggestionPrompt }),
+      });
+
+      setSuggestionPrompt('');
+      setStatus('Suggestion submitted. Thanks for the trivia!');
+      await loadGame();
+    } catch (suggestError) {
+      setError(suggestError.message);
+    } finally {
+      setSubmittingSuggestion(false);
+    }
+  }
+
+  async function dismissSuggestion(suggestion) {
+    setError('');
+    setDismissingSuggestionId(suggestion.id);
+    try {
+      await api(`/api/games/${gameId}/suggestions/${suggestion.id}/dismiss`, { method: 'POST' });
+      setStatus('Suggestion dismissed.');
+      await loadGame();
+    } catch (dismissError) {
+      setError(dismissError.message);
+    } finally {
+      setDismissingSuggestionId(null);
+    }
+  }
+
+  async function promoteSuggestion(suggestion) {
+    const options = game.draftRounds || [];
+    const roundId = promoteTargets[suggestion.id] || options[0]?.id;
+    if (!roundId) {
+      setError('Create a draft round before promoting suggestions.');
+      return;
+    }
+
+    setError('');
+    setPromotingSuggestionId(suggestion.id);
+    try {
+      await api(`/api/games/${gameId}/suggestions/${suggestion.id}/promote`, {
+        method: 'POST',
+        body: JSON.stringify({ roundId }),
+      });
+
+      setStatus('Suggestion promoted into the draft round.');
+      await loadGame();
+    } catch (promoteError) {
+      setError(promoteError.message);
+    } finally {
+      setPromotingSuggestionId(null);
+    }
+  }
+
   function toggleHour(value) {
     setEmailSettings((prev) => {
       const has = prev.expiringHours.includes(value);
@@ -348,7 +424,7 @@ export default function GamePage() {
             className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === 'active' ? 'Active Round' : tab === 'leaderboard' ? 'Season Leaderboard' : tab === 'history' ? 'Past Rounds' : tab === 'share' ? 'Share' : 'Manage Game'}
+            {tab === 'active' ? 'Active Round' : tab === 'leaderboard' ? 'Season Leaderboard' : tab === 'history' ? 'Past Rounds' : tab === 'share' ? 'Share' : tab === 'suggest' ? 'Suggest a Question' : 'Manage Game'}
           </button>
         ))}
       </nav>
@@ -454,6 +530,81 @@ export default function GamePage() {
             <strong>Game code</strong>
             <input readOnly value={game.code} />
           </label>
+        </section>
+      )}
+
+      {activeTab === 'suggest' && (
+        <section className="stack-lg">
+          <div className="card stack">
+            <h2>Suggest a Question</h2>
+            <form className="stack" onSubmit={submitSuggestion}>
+              <textarea
+                aria-label="Question suggestion"
+                placeholder="What should we ask next round?"
+                value={suggestionPrompt}
+                onChange={(event) => setSuggestionPrompt(event.target.value)}
+                maxLength={240}
+                required
+              />
+              <button className="button" type="submit" disabled={submittingSuggestion}>
+                {submittingSuggestion ? 'Submitting...' : 'Submit Suggestion'}
+              </button>
+            </form>
+          </div>
+
+          {game.role === 'ADMIN' && (
+            <div className="card stack">
+              <h2>Review Suggestions</h2>
+              {suggestions.filter((suggestion) => suggestion.status === 'PENDING').length === 0 ? (
+                <p>No pending suggestions right now.</p>
+              ) : (
+                suggestions
+                  .filter((suggestion) => suggestion.status === 'PENDING')
+                  .map((suggestion) => (
+                    <div key={suggestion.id} className="list-item">
+                      <div>
+                        <p>{suggestion.prompt}</p>
+                        <p className="small">Suggested by {suggestion.submittedBy?.username || 'Unknown'}</p>
+                      </div>
+                      <div className="row">
+                        <select
+                          aria-label={`Target draft round for suggestion: ${suggestion.prompt}`}
+                          value={promoteTargets[suggestion.id] ?? draftRounds[0]?.id ?? ''}
+                          onChange={(event) =>
+                            setPromoteTargets((prev) => ({ ...prev, [suggestion.id]: event.target.value }))
+                          }
+                          disabled={draftRounds.length === 0}
+                        >
+                          {draftRounds.length === 0 ? (
+                            <option value="">No draft rounds</option>
+                          ) : (
+                            draftRounds.map((round) => (
+                              <option key={round.id} value={round.id}>{round.name}</option>
+                            ))
+                          )}
+                        </select>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          onClick={() => promoteSuggestion(suggestion)}
+                          disabled={promotingSuggestionId === suggestion.id || draftRounds.length === 0}
+                        >
+                          {promotingSuggestionId === suggestion.id ? 'Promoting...' : 'Promote'}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          onClick={() => dismissSuggestion(suggestion)}
+                          disabled={dismissingSuggestionId === suggestion.id}
+                        >
+                          {dismissingSuggestionId === suggestion.id ? 'Dismissing...' : 'Dismiss'}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          )}
         </section>
       )}
 

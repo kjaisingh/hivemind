@@ -132,6 +132,18 @@ create table if not exists public."Session" (
 
 create index if not exists "Session_expiresAt_idx" on public."Session" ("expiresAt");
 
+create table if not exists public."QuestionSuggestion" (
+  id uuid primary key default gen_random_uuid(),
+  "gameId" uuid not null references public."Game"(id) on delete cascade,
+  "submittedById" uuid not null references public."User"(id) on delete cascade,
+  prompt text not null,
+  status text not null default 'PENDING' check (status in ('PENDING', 'PROMOTED', 'DISMISSED')),
+  "promotedRoundId" uuid references public."Round"(id) on delete set null,
+  "createdAt" timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists "QuestionSuggestion_gameId_idx" on public."QuestionSuggestion" ("gameId");
+
 -- RLS enabled with no policies on every table: blocks anon/authenticated keys entirely.
 -- The backend talks to Supabase only via the service_role key, which bypasses RLS by design.
 alter table public."User" enable row level security;
@@ -145,3 +157,4 @@ alter table public."QuestionAnswerStat" enable row level security;
 alter table public."GameEmailSettings" enable row level security;
 alter table public."EmailDeliveryLog" enable row level security;
 alter table public."Session" enable row level security;
+alter table public."QuestionSuggestion" enable row level security;

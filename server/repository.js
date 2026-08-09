@@ -254,6 +254,24 @@ async function attachGameContext(supabase, rounds, { withQuestions = false } = {
   }));
 }
 
+export async function getSuggestionsForGame(supabase, gameId) {
+  const suggestions = unwrap(
+    await supabase
+      .from('QuestionSuggestion')
+      .select('*')
+      .eq('gameId', gameId)
+      .order('createdAt', { ascending: false }),
+  );
+  const userIds = [...new Set(suggestions.map((suggestion) => suggestion.submittedById))];
+  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const usersById = new Map(users.map((user) => [user.id, user]));
+
+  return suggestions.map((suggestion) => ({
+    ...suggestion,
+    submittedBy: usersById.get(suggestion.submittedById),
+  }));
+}
+
 export async function getRoundsForClosing(supabase, now) {
   const rounds = unwrap(
     await supabase.from('Round').select('*').eq('status', 'ACTIVE').lte('expiresAt', now.toISOString()),
