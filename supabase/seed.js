@@ -137,6 +137,13 @@ async function main() {
       { roundId: activeRound.id, position: 1, prompt: 'What app do people open first each morning?' },
       { roundId: activeRound.id, position: 2, prompt: 'Most likely excuse for being 5 minutes late?' },
       { roundId: activeRound.id, position: 3, prompt: 'Which emoji appears most in your group chat?' },
+      {
+        roundId: activeRound.id,
+        position: 4,
+        prompt: 'Pick the group\'s favorite way to unwind after work.',
+        type: 'MULTIPLE_CHOICE',
+        choices: ['Nap', 'Gym', 'Video games', 'Cooking'],
+      },
     ]),
   );
 

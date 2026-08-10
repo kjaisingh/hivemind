@@ -57,8 +57,15 @@ create table if not exists public."Question" (
   id uuid primary key default gen_random_uuid(),
   "roundId" uuid not null references public."Round"(id) on delete cascade,
   prompt text not null,
-  position integer not null
+  position integer not null,
+  type text not null default 'TEXT' check (type in ('TEXT', 'MULTIPLE_CHOICE')),
+  choices jsonb
 );
+
+alter table public."Question" add column if not exists type text not null default 'TEXT';
+alter table public."Question" add column if not exists choices jsonb;
+alter table public."Question" drop constraint if exists "Question_type_check";
+alter table public."Question" add constraint "Question_type_check" check (type in ('TEXT', 'MULTIPLE_CHOICE'));
 
 create index if not exists "Question_roundId_idx" on public."Question" ("roundId");
 

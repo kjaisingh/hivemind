@@ -16,14 +16,22 @@ export async function scoreRound(supabase, roundId) {
       const normalized = normalizeAnswer(submission.rawAnswer);
       const existing = grouped.get(normalized) || {
         normalizedAnswer: normalized,
-        displayAnswer: safeDisplayAnswer(submission.rawAnswer),
+        displayVariants: new Map(),
         count: 0,
       };
+      const display = safeDisplayAnswer(submission.rawAnswer);
+      existing.displayVariants.set(display, (existing.displayVariants.get(display) || 0) + 1);
       existing.count += 1;
       grouped.set(normalized, existing);
     }
 
-    const stats = Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+    const stats = Array.from(grouped.values())
+      .map((item) => ({
+        normalizedAnswer: item.normalizedAnswer,
+        displayAnswer: Array.from(item.displayVariants.entries()).sort((a, b) => b[1] - a[1])[0][0],
+        count: item.count,
+      }))
+      .sort((a, b) => b.count - a.count);
     const totalResponses = question.submissions.length;
 
     unwrap(await supabase.from('QuestionAnswerStat').delete().eq('questionId', question.id));

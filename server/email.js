@@ -1,25 +1,10 @@
-import nodemailer from 'nodemailer';
-
-const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-
-const transporter = hasSmtp
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: Number(process.env.SMTP_PORT || 587) === 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      // Nodemailer's default connectionTimeout is 2 minutes, and each
-      // recipient in a bulk send opens its own connection — a flaky SMTP
-      // host can otherwise hang an admin request for many minutes even
-      // though the caller now tolerates the eventual failure.
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 15_000,
-    })
-  : null;
+// Resend's SMTP transport shares infra with Render's free-tier outbound
+// network, which intermittently times out raw SMTP socket/TLS handshakes.
+// Resend's HTTPS API uses the same credential (SMTP_PASS *is* the Resend
+// API key) over a plain fetch, sidestepping that flakiness entirely.
+const RESEND_API_KEY = process.env.SMTP_PASS;
+const hasResend = Boolean(RESEND_API_KEY && process.env.SMTP_FROM);
+const REQUEST_TIMEOUT_MS = 10_000;
 
 function escapeHtml(value) {
   return String(value)
@@ -46,15 +31,41 @@ export async function sendEmail({ to, subject, intro, gameName }) {
   const appUrl = process.env.CLIENT_URL;
   const html = buildEmail(subject, intro, gameName, appUrl);
 
-  if (!transporter) {
+  if (!hasResend) {
     console.log('[email:mock]', { to, subject, intro });
     return;
   }
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM,
-    to,
-    subject,
-    html,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.SMTP_FROM,
+        to,
+        subject,
+        html,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Email send timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(`Message failed: ${response.status} ${body.message || response.statusText}`);
+  }
 }

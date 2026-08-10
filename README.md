@@ -13,8 +13,7 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 - **Nudge Stragglers**: Admins can send a one-click reminder email to anyone who hasn't submitted answers for the active round yet.
 
 ## Known Limitations
-- **Google OAuth is optional.** Email/password sign-in always works; the Google sign-in button only appears once `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are set.
-- **Reminder emails are best-effort.** SMTP connections are capped at a 10–15s timeout, and a failed send for one recipient is logged and skipped rather than blocking the batch or the admin's request — the dedupe record is rolled back so a later retry isn't silently swallowed.
+- **Reminder emails are best-effort.** Requests to Resend are capped at a 10s timeout, and a failed send for one recipient is logged and skipped rather than blocking the batch or the admin's request — the dedupe record is rolled back so a later retry isn't silently swallowed.
 
 ## Feature Backlog
 - Proactive "round published" notification (email or push), instead of relying on the admin's manual reminder nudge.
@@ -27,7 +26,7 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 - **Frontend**: React + Vite
 - **Backend**: Node.js + Express
 - **Database**: Supabase (PostgreSQL via `@supabase/supabase-js`)
-- **Auth**: Passport (Local + Google OAuth)
+- **Auth**: Passport (Local)
 - **Charts**: Recharts
 - **Deployment**: Render (single web service)
 
@@ -46,7 +45,7 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
    ```
 5. Open the app.
    - Frontend: `http://localhost:5183`
-   - Backend API: `http://localhost:3001/api/health`
+   - Backend API: `http://localhost:3001`
 
 ### Demo Accounts
 All demo users share one password, set via `DEMO_PASSWORD` in `.env` (if unset, `npm run setup` generates one and prints it once — save it):
@@ -90,7 +89,6 @@ Seeded game includes:
 - Runtime: Node 22+
 - Set env vars per [Environment Variables](#environment-variables), using the deployed Render URL instead of localhost for `BASE_URL`/`CLIENT_URL`.
 
-After first deploy, also set `GOOGLE_CALLBACK_URL=https://<your-render-service>.onrender.com/api/auth/google/callback` if Google OAuth is enabled, then redeploy.
 
 ## Environment Variables
 Full defaults and comments are in [`.env.example`](.env.example).
@@ -101,6 +99,5 @@ Full defaults and comments are in [`.env.example`](.env.example).
 - `SUPABASE_URL` — Supabase **project** URL (Settings → API → Project URL, e.g. `https://xxxx.supabase.co`) — not the `/rest/v1/` REST endpoint.
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only `service_role` key (Settings → API). Bypasses row-level security by design — never expose it client-side.
 - `SESSION_SECRET` — random string used to sign session cookies.
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL` — optional, enables Google OAuth sign-in.
-- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` — optional, enables reminder emails.
+- `SMTP_PASS` / `SMTP_FROM` — optional, enables reminder emails via Resend's HTTPS API (`SMTP_PASS` is the Resend API key).
 - `DEMO_PASSWORD` — shared password for demo accounts seeded by `npm run setup`.

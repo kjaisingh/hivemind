@@ -87,7 +87,6 @@ export default function DashboardPage() {
           <p>Your hive is buzzing across {games.length} game(s).</p>
         </div>
         <div className="row">
-          <Link className="button button-secondary" to="/">Info</Link>
           <button className="button button-secondary" onClick={logout} type="button">Logout</button>
         </div>
       </header>

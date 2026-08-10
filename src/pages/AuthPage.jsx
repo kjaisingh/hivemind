@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, apiUrl } from '../lib/api';
+import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuthPage() {
   const [isSignup, setIsSignup] = useState(true);
-  const [form, setForm] = useState({ email: '', username: '', password: '' });
+  const [form, setForm] = useState({ email: '', username: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
-  const [googleEnabled, setGoogleEnabled] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { refresh } = useAuth();
@@ -15,19 +14,18 @@ export default function AuthPage() {
   const invite = useMemo(() => searchParams.get('invite') || '', [searchParams]);
   const next = useMemo(() => searchParams.get('next') || '/dashboard', [searchParams]);
 
-  useEffect(() => {
-    api('/api/public-config')
-      .then((data) => setGoogleEnabled(Boolean(data.googleEnabled)))
-      .catch(() => setGoogleEnabled(false));
-  }, []);
-
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
 
+    if (isSignup && form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     const path = isSignup ? '/api/auth/signup' : '/api/auth/login';
     const body = isSignup
-      ? form
+      ? { email: form.email, username: form.username, password: form.password }
       : { email: form.email, password: form.password };
 
     try {
@@ -84,14 +82,18 @@ export default function AuthPage() {
             required
           />
 
+          {isSignup && (
+            <input
+              placeholder="Confirm password"
+              type="password"
+              value={form.confirmPassword}
+              onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+              required
+            />
+          )}
+
           <button className="button" type="submit">{isSignup ? 'Sign up' : 'Login'}</button>
         </form>
-
-        {googleEnabled && (
-          <a className="button button-secondary" href={apiUrl(`/api/auth/google${invite ? `?invite=${invite}` : ''}`)}>
-            Continue with Google
-          </a>
-        )}
 
         {error && <p className="error">{error}</p>}
 
