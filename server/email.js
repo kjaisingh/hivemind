@@ -11,6 +11,13 @@ const transporter = hasSmtp
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      // Nodemailer's default connectionTimeout is 2 minutes, and each
+      // recipient in a bulk send opens its own connection — a flaky SMTP
+      // host can otherwise hang an admin request for many minutes even
+      // though the caller now tolerates the eventual failure.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
     })
   : null;
 
