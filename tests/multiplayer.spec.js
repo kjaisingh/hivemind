@@ -24,7 +24,7 @@ test('two players who answer identically tie for rank 1 and both earn a medal', 
   await expect(adminPage).toHaveURL(/\/games\//);
   const gameId = new URL(adminPage.url()).pathname.split('/')[2];
 
-  await adminPage.getByRole('button', { name: 'Share' }).click();
+  await adminPage.getByRole('tab', { name: 'Share' }).click();
   const code = await adminPage.getByLabel('Game code').inputValue();
 
   // Player joins by code via the real UI form.

@@ -429,11 +429,15 @@ export default function GamePage() {
         </div>
       </header>
 
-      <nav className="tab-row">
+      <nav className="tab-row" role="tablist">
         {visibleTabs.map((tab) => (
           <button
             key={tab}
             type="button"
+            role="tab"
+            id={`tab-${tab}`}
+            aria-selected={activeTab === tab}
+            aria-controls={`panel-${tab}`}
             className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
@@ -443,7 +447,7 @@ export default function GamePage() {
       </nav>
 
       {activeTab === 'active' && (
-        <section className="card stack">
+        <section className="card stack" role="tabpanel" id="panel-active" aria-labelledby="tab-active">
           {!game.activeRound ? (
             <p>No active round right now. Stretch your fingers, greatness is coming.</p>
           ) : (
@@ -489,7 +493,7 @@ export default function GamePage() {
       )}
 
       {activeTab === 'leaderboard' && (
-        <section className="card">
+        <section className="card" role="tabpanel" id="panel-leaderboard" aria-labelledby="tab-leaderboard">
           <h2>Season Leaderboard</h2>
           <div className="table-wrap">
             <table>
@@ -521,7 +525,7 @@ export default function GamePage() {
       )}
 
       {activeTab === 'history' && (
-        <section className="card stack">
+        <section className="card stack" role="tabpanel" id="panel-history" aria-labelledby="tab-history">
           <h2>Past Rounds</h2>
           {game.pastRounds.length === 0 ? <p>No closed rounds yet.</p> : game.pastRounds.map((round) => (
             <div key={round.id} className="list-item">
@@ -533,7 +537,7 @@ export default function GamePage() {
       )}
 
       {activeTab === 'share' && (
-        <section className="card stack">
+        <section className="card stack" role="tabpanel" id="panel-share" aria-labelledby="tab-share">
           <h2>Share this game</h2>
           <label className="stack">
             <strong>Invite URL</strong>
@@ -565,7 +569,7 @@ export default function GamePage() {
       )}
 
       {activeTab === 'suggest' && (
-        <section className="stack-lg">
+        <section className="stack-lg" role="tabpanel" id="panel-suggest" aria-labelledby="tab-suggest">
           <div className="card stack">
             <h2>Suggest a Question</h2>
             <form className="stack" onSubmit={submitSuggestion}>
@@ -640,7 +644,7 @@ export default function GamePage() {
       )}
 
       {activeTab === 'manage' && game.role === 'ADMIN' && (
-        <section className="grid-two">
+        <section className="grid-two" role="tabpanel" id="panel-manage" aria-labelledby="tab-manage">
           <div className="card stack">
             <h2>{editingRoundId ? 'Edit Draft Round' : 'Create Round'}</h2>
             <form className="stack" onSubmit={submitRoundForm}>

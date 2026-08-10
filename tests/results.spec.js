@@ -22,7 +22,7 @@ test('differentiated answers produce split scores, a rank break, and a no-answer
   await expect(adminPage).toHaveURL(/\/games\//);
   const gameId = new URL(adminPage.url()).pathname.split('/')[2];
 
-  await adminPage.getByRole('button', { name: 'Share' }).click();
+  await adminPage.getByRole('tab', { name: 'Share' }).click();
   const code = await adminPage.getByLabel('Game code').inputValue();
 
   for (const p of [bPage, cPage]) {

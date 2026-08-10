@@ -23,7 +23,7 @@ test('admin can remind players with unanswered questions, and non-admins cannot'
   await expect(adminPage).toHaveURL(/\/games\//);
   const gameId = new URL(adminPage.url()).pathname.split('/')[2];
 
-  await adminPage.getByRole('button', { name: 'Share' }).click();
+  await adminPage.getByRole('tab', { name: 'Share' }).click();
   const code = await adminPage.getByLabel('Game code').inputValue();
 
   await playerPage.getByPlaceholder('Enter game code (ABC-123)').fill(code);
