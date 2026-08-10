@@ -1,6 +1,7 @@
 # Hivemind
-Hivemind is a multiplayer guessing game where the best answer is the one your group also submits.
+[![CI](https://github.com/kjaisingh/hivemind/actions/workflows/ci.yml/badge.svg)](https://github.com/kjaisingh/hivemind/actions/workflows/ci.yml)
 
+Hivemind is a multiplayer guessing game where the best answer is the one your group also submits.
 
 ## Overview
 - **Create and Invite**: One person acts as the game admin, setting up a new game and sharing a custom invite link. Friends, family, or coworkers simply click the link, create an account, and are instantly dropped into the private group.
@@ -11,42 +12,41 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 - **Climb the Ranks**: Every round's points are tallied up into a massive Leaderboard, with medal counts and your own row highlighted. Check your weekly stats, see where your mind diverged from the pack, and accumulate the highest total score across all the active rounds to climb the Season Standings and be crowned the ultimate Hivemind champion!
 - **Nudge Stragglers**: Admins can send a one-click reminder email to anyone who hasn't submitted answers for the active round yet.
 
+## Known Limitations
+- **Google OAuth is optional.** Email/password sign-in always works; the Google sign-in button only appears once `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are set.
+- **Reminder emails are best-effort.** SMTP connections are capped at a 10–15s timeout, and a failed send for one recipient is logged and skipped rather than blocking the batch or the admin's request — the dedupe record is rolled back so a later retry isn't silently swallowed.
 
 ## Feature Backlog
-Nothing currently queued — open an issue or PR with ideas.
-
+- Proactive "round published" notification (email or push), instead of relying on the admin's manual reminder nudge.
+- Player up/down-voting on suggested questions, instead of the admin being sole reviewer.
+- Configurable scoring (e.g. a bonus for landing on the single most-common answer, not just a flat count).
+- Recurring/scheduled round publishing on a cadence, instead of manual publish only.
+- Exportable season results (CSV) for archiving past seasons.
 
 ## Tech Stack
-- Frontend: React + Vite.
-- Backend: Node.js + Express.
-- Database: Supabase (PostgreSQL via `@supabase/supabase-js`).
-- Auth: Passport (Local + Google OAuth).
-- Charts: Recharts.
-- Hosting: Render (single web service).
-
+- **Frontend**: React + Vite
+- **Backend**: Node.js + Express
+- **Database**: Supabase (PostgreSQL via `@supabase/supabase-js`)
+- **Auth**: Passport (Local + Google OAuth)
+- **Charts**: Recharts
+- **Deployment**: Render (single web service)
 
 ## Local Development
-### Database Setup
-1. Create a free project at [supabase.com](https://supabase.com).
-2. In the SQL Editor, run the SQL in `supabase/schema.sql`.
-3. Create a `.env` file in this folder (copy `.env.example`) and fill in:
-   ```
-   SUPABASE_URL="https://<your-project-ref>.supabase.co"
-   SUPABASE_SERVICE_ROLE_KEY="<your service_role key>"
-   ```
-   `SUPABASE_URL` is the Supabase **project** URL (Settings → API → Project URL) — not the `/rest/v1/` REST endpoint.
 
-### Quick Start
-From this folder:
-```bash
-npm install
-npm run setup
-npm run dev
-
-```
-Then open:
-- Frontend: `http://localhost:5183`
-- Backend API: `http://localhost:3001/api/health`
+1. Create a free project at [supabase.com](https://supabase.com), then in the SQL Editor run [`supabase/schema.sql`](supabase/schema.sql).
+2. Copy `.env.example` to `.env` and fill in `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` from Project Settings → API. `SUPABASE_URL` is the Supabase **project** URL — not the `/rest/v1/` REST endpoint.
+3. Install dependencies and seed demo data.
+   ```bash
+   npm install
+   npm run setup
+   ```
+4. Start the app.
+   ```bash
+   npm run dev
+   ```
+5. Open the app.
+   - Frontend: `http://localhost:5183`
+   - Backend API: `http://localhost:3001/api/health`
 
 ### Demo Accounts
 All demo users share one password, set via `DEMO_PASSWORD` in `.env` (if unset, `npm run setup` generates one and prints it once — save it):
@@ -59,23 +59,6 @@ Seeded game includes:
 - 1 active round ready to answer.
 - 1 past round with real computed results and leaderboard data.
 
-
-## Deployment
-### Blueprint
-1. In Render, click **New +** → **Blueprint**.
-2. Connect your GitHub repo.
-3. Render reads `render.yaml` and creates the service.
-
-### Render Environment Variables
-After first deploy, set:
-- `BASE_URL=https://<your-render-service>.onrender.com`
-- `CLIENT_URL=https://<your-render-service>.onrender.com`
-- `SUPABASE_URL=https://<your-project-ref>.supabase.co`
-- `SUPABASE_SERVICE_ROLE_KEY=<your service_role key>`
-- `GOOGLE_CALLBACK_URL=https://<your-render-service>.onrender.com/api/auth/google/callback` (only if Google OAuth enabled)
-Redeploy after updating variables.
-
-
 ## Scripts
 - `npm run setup` → seed demo data (run `supabase/schema.sql` in Supabase first).
 - `npm run dev` → run server and client together (`dev:server` + `dev:client`).
@@ -86,7 +69,6 @@ Redeploy after updating variables.
 - `npm start` → run production server.
 - `npm run preview` → preview the production frontend build locally.
 
-
 ## Testing & CI
 - `npm test` runs the full Playwright suite against a real browser: auth (signup/login/logout/session
   persistence), a two-browser-context multiplayer round (draft → publish → submit → score →
@@ -95,12 +77,30 @@ Redeploy after updating variables.
   Actions: install, syntax-check all `server/*.js` files, build the client, and a non-blocking
   `npm audit`.
 
+## Deployment
+
+### Blueprint
+1. In Render, click **New +** → **Blueprint**.
+2. Connect your GitHub repo.
+3. Render reads `render.yaml` and creates the service.
+
+### Manual Web Service
+- Build Command: `npm install && npm run build`
+- Start Command: `npm start`
+- Runtime: Node 22+
+- Set env vars per [Environment Variables](#environment-variables), using the deployed Render URL instead of localhost for `BASE_URL`/`CLIENT_URL`.
+
+After first deploy, also set `GOOGLE_CALLBACK_URL=https://<your-render-service>.onrender.com/api/auth/google/callback` if Google OAuth is enabled, then redeploy.
 
 ## Environment Variables
-- `BASE_URL`.
-- `CLIENT_URL`.
-- `SUPABASE_URL`: Supabase **project** URL (Settings → API → Project URL, e.g. `https://xxxx.supabase.co`) — not the `/rest/v1/` REST endpoint.
-- `SUPABASE_SERVICE_ROLE_KEY`: server-only `service_role` key (Settings → API). Bypasses row-level security by design — never expose it client-side.
-- `SESSION_SECRET`.
-- Google OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`.
-- Email sending: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`.
+Full defaults and comments are in [`.env.example`](.env.example).
+
+- `PORT` — backend port (default `3001`).
+- `BASE_URL` — public URL of the backend.
+- `CLIENT_URL` — allowed frontend origin.
+- `SUPABASE_URL` — Supabase **project** URL (Settings → API → Project URL, e.g. `https://xxxx.supabase.co`) — not the `/rest/v1/` REST endpoint.
+- `SUPABASE_SERVICE_ROLE_KEY` — server-only `service_role` key (Settings → API). Bypasses row-level security by design — never expose it client-side.
+- `SESSION_SECRET` — random string used to sign session cookies.
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL` — optional, enables Google OAuth sign-in.
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` — optional, enables reminder emails.
+- `DEMO_PASSWORD` — shared password for demo accounts seeded by `npm run setup`.
