@@ -4,17 +4,16 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 
 ## Overview
 - **Create and Invite**: One person acts as the game admin, setting up a new game and sharing a custom invite link. Friends, family, or coworkers simply click the link, create an account, and are instantly dropped into the private group.
-- **Answer the Call**: Whenever the admin kicks off a new round, players log in to face a series of open-ended questions. You can take your time and edit your submissions right up until the round's expiration timer hits zero.
+- **Draft, Then Publish**: Admins build a round's questions as a draft — free to edit or delete it — before publishing it to the group. Players can also suggest questions for the admin to review and promote into a draft round.
+- **Answer the Call**: Whenever the admin publishes a round, players log in to face a series of open-ended questions. You can take your time and edit your submissions right up until the round's expiration timer hits zero — a live countdown shows exactly how much time is left, both on the round itself and on the dashboard's active-games list.
 - **Think Like the Hive**: Here is the catch—there are no strictly "correct" answers in the traditional sense! Your goal is to submit the exact same answer as the majority of your group. You have to put yourself in your friends' shoes and guess what the most common response will be.
-- **Reveal and Score**: Once the deadline passes, the round locks and the results are published. The game automatically groups everyone's answers together and shows a detailed breakdown. Your score for a question is exactly equal to the number of people who guessed the same thing—for example, if you answer "Hydrogen" and 123 other people did too, you bag 124 points!
-- **Climb the Ranks**: Every round's points are tallied up into a massive Leaderboard. Check your weekly stats, see where your mind diverged from the pack, and accumulate the highest total score across all the active rounds to climb the Season Standings and be crowned the ultimate Hivemind champion!
+- **Reveal and Score**: Once the deadline passes, the round locks and the results are published. The game automatically groups everyone's answers together and shows a detailed breakdown, with a 🥇 medal for whoever came out on top. Your score for a question is exactly equal to the number of people who guessed the same thing—for example, if you answer "Hydrogen" and 123 other people did too, you bag 124 points!
+- **Climb the Ranks**: Every round's points are tallied up into a massive Leaderboard, with medal counts and your own row highlighted. Check your weekly stats, see where your mind diverged from the pack, and accumulate the highest total score across all the active rounds to climb the Season Standings and be crowned the ultimate Hivemind champion!
+- **Nudge Stragglers**: Admins can send a one-click reminder email to anyone who hasn't submitted answers for the active round yet.
 
 
 ## Feature Backlog
-- Image/media support for questions.
-- Seasonal reset button to archive the current leaderboard and start a fresh season without needing a new invite link.
-- LLM-based answer normalization to automatically merge minor typos or semantic variations.
-- LLM-based answer clustering to automatically group similar responses together.
+Nothing currently queued — open an issue or PR with ideas.
 
 
 ## Tech Stack
@@ -46,7 +45,7 @@ npm run dev
 
 ```
 Then open:
-- Frontend: `http://localhost:5173`
+- Frontend: `http://localhost:5183`
 - Backend API: `http://localhost:3001/api/health`
 
 ### Demo Accounts
@@ -79,10 +78,22 @@ Redeploy after updating variables.
 
 ## Scripts
 - `npm run setup` → seed demo data (run `supabase/schema.sql` in Supabase first).
-- `npm run dev` → run server and client together.
+- `npm run dev` → run server and client together (`dev:server` + `dev:client`).
+- `npm run dev:server` → server only, with `nodemon` reload.
+- `npm run dev:client` → Vite dev server only.
 - `npm test` → run the Playwright end-to-end suite (starts its own dev server; see `playwright.config.js`).
 - `npm run build` → production frontend build.
 - `npm start` → run production server.
+- `npm run preview` → preview the production frontend build locally.
+
+
+## Testing & CI
+- `npm test` runs the full Playwright suite against a real browser: auth (signup/login/logout/session
+  persistence), a two-browser-context multiplayer round (draft → publish → submit → score →
+  leaderboard), reminders, results, and IDOR/security regressions.
+- Every push and PR to `main` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on GitHub
+  Actions: install, syntax-check all `server/*.js` files, build the client, and a non-blocking
+  `npm audit`.
 
 
 ## Environment Variables
