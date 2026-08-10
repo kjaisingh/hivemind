@@ -106,7 +106,9 @@ h3 {
 
 .landing {
   display: grid;
-  gap: var(--space-18);
+  gap: var(--space-24);
+  min-height: calc(100dvh - var(--space-24) - var(--space-40));
+  align-content: safe center;
 }
 
 .hero {
@@ -405,6 +407,10 @@ td {
 @media (max-width: 640px) {
   .page {
     padding: var(--space-18) var(--space-12) var(--space-30);
+  }
+
+  .landing {
+    min-height: calc(100dvh - var(--space-18) - var(--space-30));
   }
 
   .hero {
