@@ -72,6 +72,14 @@ const suggestionSchema = z.object({
   prompt: z.string().min(1).max(240),
 });
 
+const signupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+});
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -158,7 +166,7 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
-app.post('/api/auth/signup', loginLimiter, async (req, res) => {
+app.post('/api/auth/signup', signupLimiter, async (req, res) => {
   const parsed = signUpSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid sign up data.' });

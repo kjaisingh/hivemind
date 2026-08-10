@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Syntax-check server files
+        run: |
+          for f in server/*.js; do node --check "$f"; done
+
+      - name: Build client
+        run: npm run build
+
+      - name: Audit dependencies (non-blocking)
+        run: npm audit --audit-level=high || true

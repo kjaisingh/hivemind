@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getUrgencyTier, urgencyPillClass } from '../lib/countdown';
+import { useAuth } from '../context/AuthContext';
 
 const tabs = ['active', 'leaderboard', 'history', 'share', 'suggest', 'manage'];
 
@@ -40,6 +41,7 @@ function Countdown({ expiresAt, onExpire }) {
 export default function GamePage() {
   const { gameId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [game, setGame] = useState(null);
   const [activeTab, setActiveTab] = useState('active');
   const [answers, setAnswers] = useState({});
@@ -74,6 +76,7 @@ export default function GamePage() {
   const [suggestionPrompt, setSuggestionPrompt] = useState('');
   const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
   const [promoteTargets, setPromoteTargets] = useState({});
+  const [copiedField, setCopiedField] = useState('');
   const [dismissingSuggestionId, setDismissingSuggestionId] = useState(null);
   const [promotingSuggestionId, setPromotingSuggestionId] = useState(null);
 
@@ -397,6 +400,12 @@ export default function GamePage() {
     });
   }
 
+  async function copyToClipboard(text, field) {
+    await navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(''), 2000);
+  }
+
   if (error && !game) {
     return <div className="page"><p className="error" role="alert">{error}</p></div>;
   }
@@ -497,7 +506,7 @@ export default function GamePage() {
                   <tr><td colSpan={4}>No scores yet.</td></tr>
                 ) : (
                   game.leaderboard.map((row) => (
-                    <tr key={row.userId}>
+                    <tr key={row.userId} className={row.userId === user?.id ? 'own-row' : undefined}>
                       <td>{row.rank}</td>
                       <td>{row.username}</td>
                       <td>{row.points}</td>
@@ -528,11 +537,29 @@ export default function GamePage() {
           <h2>Share this game</h2>
           <label className="stack">
             <strong>Invite URL</strong>
-            <input readOnly value={game.inviteUrl} />
+            <div className="row">
+              <input readOnly value={game.inviteUrl} />
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => copyToClipboard(game.inviteUrl, 'url')}
+              >
+                {copiedField === 'url' ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
           </label>
           <label className="stack">
             <strong>Game code</strong>
-            <input readOnly value={game.code} />
+            <div className="row">
+              <input readOnly value={game.code} />
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => copyToClipboard(game.code, 'code')}
+              >
+                {copiedField === 'code' ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
           </label>
         </section>
       )}

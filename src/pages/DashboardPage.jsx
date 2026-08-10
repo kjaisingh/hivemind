@@ -10,6 +10,8 @@ export default function DashboardPage() {
   const [games, setGames] = useState([]);
   const [createForm, setCreateForm] = useState({ name: '', description: '' });
   const [joinCode, setJoinCode] = useState('');
+  const [creatingGame, setCreatingGame] = useState(false);
+  const [joiningGame, setJoiningGame] = useState(false);
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => Date.now());
 
@@ -36,6 +38,7 @@ export default function DashboardPage() {
   async function createGame(event) {
     event.preventDefault();
     setError('');
+    setCreatingGame(true);
 
     try {
       const data = await api('/api/games', {
@@ -45,12 +48,14 @@ export default function DashboardPage() {
       navigate(`/games/${data.game.id}`);
     } catch (createError) {
       setError(createError.message);
+      setCreatingGame(false);
     }
   }
 
   async function joinGame(event) {
     event.preventDefault();
     setError('');
+    setJoiningGame(true);
 
     try {
       const data = await api('/api/games/join', {
@@ -60,6 +65,7 @@ export default function DashboardPage() {
       navigate(`/games/${data.gameId}`);
     } catch (joinError) {
       setError(joinError.message);
+      setJoiningGame(false);
     }
   }
 
@@ -102,7 +108,9 @@ export default function DashboardPage() {
               onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))}
               required
             />
-            <button className="button" type="submit">Create Game</button>
+            <button className="button" type="submit" disabled={creatingGame}>
+              {creatingGame ? 'Creating...' : 'Create Game'}
+            </button>
           </form>
         </div>
 
@@ -115,7 +123,9 @@ export default function DashboardPage() {
               onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
               required
             />
-            <button className="button" type="submit">Join</button>
+            <button className="button" type="submit" disabled={joiningGame}>
+              {joiningGame ? 'Joining...' : 'Join'}
+            </button>
           </form>
           <p className="small">Tip: invite links also auto-join if you are already signed in.</p>
         </div>
