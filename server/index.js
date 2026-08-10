@@ -22,7 +22,6 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.PORT || 3001);
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
 
 app.use(
   cors({
@@ -104,8 +103,9 @@ const emailLimiter = rateLimit({
   message: { message: 'Too many emails sent. Please try again later.' },
 });
 
-function buildGameInvite(game) {
-  return `${baseUrl}/join/${game.inviteToken}`;
+function buildGameInvite(req, game) {
+  const origin = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+  return `${origin}/join/${game.inviteToken}`;
 }
 
 async function ensureMembership(gameId, userId, role = 'PLAYER') {
@@ -301,7 +301,7 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
       name: game.name,
       description: game.description,
       code: game.code,
-      inviteUrl: buildGameInvite(game),
+      inviteUrl: buildGameInvite(req, game),
       hasPendingSubmission: pending,
       activeRound: activeRound
         ? {
@@ -350,7 +350,7 @@ app.post('/api/games', requireAuth, async (req, res) => {
   res.json({
     game: {
       ...game,
-      inviteUrl: buildGameInvite(game),
+      inviteUrl: buildGameInvite(req, game),
     },
   });
 });
@@ -410,7 +410,7 @@ app.get('/api/games/:gameId', requireAuth, async (req, res) => {
       name: game.name,
       description: game.description,
       code: game.code,
-      inviteUrl: buildGameInvite(game),
+      inviteUrl: buildGameInvite(req, game),
       role,
       activeRound: activeRound
         ? {
