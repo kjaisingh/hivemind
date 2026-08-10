@@ -297,13 +297,17 @@ export default function GamePage() {
     setError('');
     setSendingEmail(true);
     try {
-      await api(`/api/games/${gameId}/email/manual`, {
+      const data = await api(`/api/games/${gameId}/email/manual`, {
         method: 'POST',
         body: JSON.stringify(manualEmail),
       });
 
       setManualEmail({ subject: '', message: '' });
-      setStatus('Email sent to all players in this game.');
+      setStatus(
+        data.sentCount === data.totalCount
+          ? `Email sent to all ${data.totalCount} player(s) in this game.`
+          : `Email sent to ${data.sentCount} of ${data.totalCount} player(s) — some deliveries failed.`,
+      );
     } catch (emailError) {
       setError(emailError.message);
     } finally {

@@ -21,12 +21,22 @@ export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, reci
     throw new Error(insertError.message);
   }
 
-  await sendEmail({
-    to: recipient.email,
-    subject,
-    intro,
-    gameName,
-  });
+  try {
+    await sendEmail({
+      to: recipient.email,
+      subject,
+      intro,
+      gameName,
+    });
+  } catch (error) {
+    // Delete the dedupe row so a real send failure (e.g. SMTP outage) doesn't
+    // permanently block a retry — the unique constraint would silently skip
+    // it forever otherwise. One recipient's bounce also shouldn't abort the
+    // rest of the batch or the request (dashboard/publish/remind) that
+    // triggered it.
+    await supabase.from('EmailDeliveryLog').delete().eq('dedupeKey', dedupeKey);
+    console.error('[email]', dedupeKey, error);
+  }
 }
 
 let inFlightProcessRounds = null;

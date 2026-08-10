@@ -777,12 +777,16 @@ app.post('/api/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, 
     const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
 
     for (const user of users) {
-      await sendEmail({
-        to: user.email,
-        subject: `${game.name}: ${round.name} is live`,
-        intro: announcement || 'A fresh round just opened. Time to read minds and earn points.',
-        gameName: game.name,
-      });
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: `${game.name}: ${round.name} is live`,
+          intro: announcement || 'A fresh round just opened. Time to read minds and earn points.',
+          gameName: game.name,
+        });
+      } catch (error) {
+        console.error('[email]', 'round-open', user.email, error);
+      }
     }
   }
 
@@ -832,16 +836,22 @@ app.post('/api/games/:gameId/email/manual', requireAuth, emailLimiter, async (re
   const userIds = memberships.map((membership) => membership.userId);
   const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
 
+  let sentCount = 0;
   for (const user of users) {
-    await sendEmail({
-      to: user.email,
-      subject,
-      intro: message,
-      gameName: game.name,
-    });
+    try {
+      await sendEmail({
+        to: user.email,
+        subject,
+        intro: message,
+        gameName: game.name,
+      });
+      sentCount += 1;
+    } catch (error) {
+      console.error('[email]', 'manual', user.email, error);
+    }
   }
 
-  res.json({ ok: true });
+  res.json({ ok: true, sentCount, totalCount: users.length });
 });
 
 app.post('/api/games/:gameId/rounds/:roundId/remind', requireAuth, emailLimiter, async (req, res) => {
