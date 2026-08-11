@@ -10,7 +10,10 @@ function normalizeAnswer(answer) {
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .split(' ')
+    .map((word) => (word.endsWith('s') && word.length > 3 ? word.slice(0, -1) : word))
+    .join(' ');
 }
 
 export default function RoundResultsPage() {
