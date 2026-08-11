@@ -30,7 +30,7 @@ export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, reci
     });
   } catch (error) {
     // Delete the dedupe row so a real send failure (e.g. SMTP outage) doesn't
-    // permanently block a retry — the unique constraint would silently skip
+    // permanently block a retry. The unique constraint would silently skip
     // it forever otherwise. One recipient's bounce also shouldn't abort the
     // rest of the batch or the request (dashboard/publish/remind) that
     // triggered it.
@@ -98,32 +98,34 @@ async function runProcessRounds(supabase) {
 
     const submittedQuestionPairs = new Set(submissions.map((item) => `${item.userId}:${item.questionId}`));
 
-    for (const hours of hoursOptions) {
-      const triggerStart = dayjs(round.expiresAt).subtract(hours, 'hour');
-      const triggerEnd = triggerStart.add(1, 'minute');
-      const nowTime = dayjs();
-      if (!(nowTime.isAfter(triggerStart) && nowTime.isBefore(triggerEnd))) {
+    const nowTime = dayjs();
+    if (!nowTime.isBefore(dayjs(round.expiresAt))) {
+      continue;
+    }
+
+    const crossedHours = hoursOptions.filter((hours) => !nowTime.isBefore(dayjs(round.expiresAt).subtract(hours, 'hour')));
+    if (crossedHours.length === 0) {
+      continue;
+    }
+    const hours = Math.min(...crossedHours);
+
+    for (const membership of round.game.memberships) {
+      const hasCompletedAll = questionIds.every((questionId) => submittedQuestionPairs.has(`${membership.user.id}:${questionId}`));
+      if (hasCompletedAll) {
         continue;
       }
 
-      for (const membership of round.game.memberships) {
-        const hasCompletedAll = questionIds.every((questionId) => submittedQuestionPairs.has(`${membership.user.id}:${questionId}`));
-        if (hasCompletedAll) {
-          continue;
-        }
-
-        const dedupeKey = `expiring:${round.id}:${membership.user.id}:${hours}`;
-        await sendWithDedup(supabase, {
-          dedupeKey,
-          gameId: round.gameId,
-          roundId: round.id,
-          recipient: membership.user,
-          emailType: 'EXPIRING_SOON',
-          subject: `${round.game.name}: ${round.name} expires in ${hours} hour(s)`,
-          intro: `Quick ping: you still have unanswered questions. Your hive awaits your wisdom.`,
-          gameName: round.game.name,
-        });
-      }
+      const dedupeKey = `expiring:${round.id}:${membership.user.id}:${hours}`;
+      await sendWithDedup(supabase, {
+        dedupeKey,
+        gameId: round.gameId,
+        roundId: round.id,
+        recipient: membership.user,
+        emailType: 'EXPIRING_SOON',
+        subject: `${round.game.name}: ${round.name} expires in ${hours} hour(s)`,
+        intro: `Quick ping: you still have unanswered questions. Your hive awaits your wisdom.`,
+        gameName: round.game.name,
+      });
     }
   }
 }
