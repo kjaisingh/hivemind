@@ -16,6 +16,7 @@
   --color-primary-dark: #1d4ed8;
   --color-primary-tint: #e0eaff;
   --color-primary-deep: #1e3a8a;
+  --color-on-primary: #ffffff;
 
   --color-accent: #7c3aed;
   --color-accent-dark: #6d28d9;
@@ -275,7 +276,7 @@ textarea {
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-primary);
-  color: var(--color-surface);
+  color: var(--color-on-primary);
   padding: var(--space-10) var(--space-14);
   cursor: pointer;
   text-decoration: none;
@@ -404,8 +405,25 @@ textarea {
 
 .tab-active {
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent-dark));
-  color: var(--color-surface);
+  color: var(--color-on-primary);
   border-color: transparent;
+}
+
+.theme-toggle {
+  position: fixed;
+  bottom: var(--space-20);
+  left: var(--space-20);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  z-index: 20;
 }
 
 .list-item {
@@ -539,4 +557,46 @@ td {
   .game-card {
     flex-wrap: wrap;
   }
+}
+
+:root[data-theme="dark"] {
+  --color-ink: #e2e8f0;
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-tint: #1e2b45;
+  --color-muted: #94a3b8;
+
+  --color-border: #334155;
+  --color-border-strong: #475569;
+  --color-border-accent: #334155;
+  --color-border-accent-2: #334155;
+
+  --color-danger: #fca5a5;
+  --color-danger-bg: #401f1f;
+  --color-danger-border: #7f1d1d;
+
+  --color-success: #86efac;
+  --color-success-bg: #142e1f;
+  --color-success-border: #166534;
+
+  --color-warning: #fcd34d;
+  --color-warning-bg: #402c06;
+  --color-warning-border: #78350f;
+
+  --color-highlight: #422f06;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="dark"] .own-row {
+  background: rgba(37, 99, 235, 0.25);
+}
+
+:root[data-theme="dark"] .choice-option:has(input:checked) {
+  background: rgba(37, 99, 235, 0.25);
+}
+
+:root[data-theme="dark"] .score-headline {
+  color: #c4b5fd;
 }
