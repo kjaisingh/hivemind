@@ -45,6 +45,13 @@ router.post('/games/:gameId/email/manual', requireAuth, emailLimiter, async (req
   const subject = String(req.body.subject || '').trim();
   const message = String(req.body.message || '').trim();
 
+  if (!subject || !message) {
+    return res.status(400).json({ message: 'Subject and message are required.' });
+  }
+  if (subject.length > 200 || message.length > 5000) {
+    return res.status(400).json({ message: 'Subject or message is too long.' });
+  }
+
   const game = unwrap(await supabase.from('Game').select('*').eq('id', req.params.gameId).maybeSingle());
   const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', req.params.gameId));
   const userIds = memberships.map((membership) => membership.userId);
