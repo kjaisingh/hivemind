@@ -53,6 +53,7 @@ export default function ActiveRoundTab({
                 </div>
               ) : (
                 <input
+                  aria-label={question.prompt}
                   value={answers[question.id] || ''}
                   onChange={(event) => setAnswers((prev) => ({ ...prev, [question.id]: event.target.value }))}
                   placeholder="Your answer"

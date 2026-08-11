@@ -31,7 +31,7 @@ test('cross-game publish is rejected with 404, not another game\'s round', async
       description: 'Belongs to game A.',
       startsAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      questions: ['Q1?'],
+      questions: [{ prompt: 'Q1?' }],
     },
   });
   expect(createRes.ok()).toBeTruthy();
@@ -84,7 +84,7 @@ test('cross-game results access is rejected: outsiders get 403, wrong-game round
       description: 'Belongs to game A.',
       startsAt: new Date().toISOString(),
       expiresAt,
-      questions: ['Q1?'],
+      questions: [{ prompt: 'Q1?' }],
     },
   });
   const { roundId: roundAId } = await createRes.json();

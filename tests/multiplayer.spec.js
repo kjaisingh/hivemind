@@ -41,7 +41,7 @@ test('two players who answer identically tie for rank 1 and both earn a medal', 
       description: 'Quick round for automated testing.',
       startsAt: new Date().toISOString(),
       expiresAt,
-      questions: ['Favorite color?', 'Favorite season?'],
+      questions: [{ prompt: 'Favorite color?' }, { prompt: 'Favorite season?' }],
     },
   });
   expect(createRes.ok()).toBeTruthy();

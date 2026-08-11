@@ -12,7 +12,8 @@ export async function signup(page, { email, username, password }) {
   await page.goto('/auth');
   await page.getByPlaceholder('Email').fill(email);
   await page.getByPlaceholder('Username (letters, numbers, underscore)').fill(username);
-  await page.getByPlaceholder('Password').fill(password);
+  await page.getByPlaceholder('Password', { exact: true }).fill(password);
+  await page.getByPlaceholder('Confirm password').fill(password);
   await page.getByRole('button', { name: 'Sign up' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 }

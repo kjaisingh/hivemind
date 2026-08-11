@@ -143,7 +143,8 @@ export default function GamePage() {
     setError('');
     setSavingAnswers(true);
     try {
-      await api(`/api/games/${gameId}/answers`, { method: 'POST', body: JSON.stringify({ answers }) });
+      const payload = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
+      await api(`/api/games/${gameId}/active-round/save`, { method: 'POST', body: JSON.stringify({ answers: payload }) });
       setStatus('Answers saved.');
     } catch (err) {
       setError(err.message || 'Failed to save answers');
@@ -266,8 +267,13 @@ export default function GamePage() {
     setError('');
     setRemindingPlayers(true);
     try {
-      await api(`/api/games/${gameId}/remind`, { method: 'POST' });
-      setStatus('Reminder sent to pending players.');
+      const roundId = game.activeRound.id;
+      const { remindedCount } = await api(`/api/games/${gameId}/rounds/${roundId}/remind`, { method: 'POST' });
+      setStatus(
+        remindedCount > 0
+          ? `Reminded ${remindedCount} player(s) with unanswered questions.`
+          : 'Everyone has already submitted — no reminders needed.',
+      );
     } catch (err) {
       setError(err.message || 'Failed to send reminder');
     } finally {

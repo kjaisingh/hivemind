@@ -38,7 +38,7 @@ test('differentiated answers produce split scores, a rank break, and a no-answer
       description: 'Differentiated answers.',
       startsAt: new Date().toISOString(),
       expiresAt,
-      questions: ['Favorite color?', 'Favorite season?'],
+      questions: [{ prompt: 'Favorite color?' }, { prompt: 'Favorite season?' }],
     },
   });
   expect(createRes.ok()).toBeTruthy();

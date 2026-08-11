@@ -36,7 +36,7 @@ test('admin can remind players with unanswered questions, and non-admins cannot'
       description: 'Round for reminder testing.',
       startsAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-      questions: ['Favorite food?'],
+      questions: [{ prompt: 'Favorite food?' }],
     },
   });
   expect(createRes.ok()).toBeTruthy();
