@@ -20,14 +20,7 @@ export default function App() {
           </ProtectedRoute>
         )}
       />
-      <Route
-        path="/join/:inviteToken"
-        element={(
-          <ProtectedRoute>
-            <JoinPage />
-          </ProtectedRoute>
-        )}
-      />
+      <Route path="/join/:inviteToken" element={<JoinPage />} />
       <Route
         path="/games/:gameId"
         element={(
