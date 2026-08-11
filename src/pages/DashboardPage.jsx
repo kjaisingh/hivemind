@@ -136,7 +136,7 @@ export default function DashboardPage() {
           <ul className="stack">
             {pendingAlerts.map((game) => (
               <li key={game.id} className="list-item">
-                <span>{game.name} — {game.activeRound?.name}</span>
+                <span>{game.name}: {game.activeRound?.name}</span>
                 <Link className="button button-secondary" to={`/games/${game.id}`}>Answer now</Link>
               </li>
             ))}
@@ -157,7 +157,7 @@ export default function DashboardPage() {
               </div>
               {game.hasPendingSubmission && (
                 <span className={urgencyPillClass(game.activeRound ? getUrgencyTier(game.activeRound.expiresAt, now) : 'normal')}>
-                  Needs your answers{game.activeRound ? ` — ${formatTimeRemaining(game.activeRound.expiresAt, now)}` : ''}
+                  Needs your answers{game.activeRound ? ` · ${formatTimeRemaining(game.activeRound.expiresAt, now)}` : ''}
                 </span>
               )}
             </button>

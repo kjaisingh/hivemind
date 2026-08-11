@@ -68,7 +68,7 @@ test('admin can remind players with unanswered questions, and non-admins cannot'
   await expect(playerPage.getByText('Answers saved.')).toBeVisible();
 
   await adminPage.getByRole('button', { name: 'Remind pending players' }).click();
-  await expect(adminPage.getByText('Everyone has already submitted — no reminders needed.')).toBeVisible();
+  await expect(adminPage.getByText('Everyone has already submitted. No reminders needed.')).toBeVisible();
 
   await adminContext.close();
   await playerContext.close();

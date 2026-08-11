@@ -272,7 +272,7 @@ export default function GamePage() {
       setStatus(
         remindedCount > 0
           ? `Reminded ${remindedCount} player(s) with unanswered questions.`
-          : 'Everyone has already submitted — no reminders needed.',
+          : 'Everyone has already submitted. No reminders needed.',
       );
     } catch (err) {
       setError(err.message || 'Failed to send reminder');

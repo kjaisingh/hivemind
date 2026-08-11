@@ -3,7 +3,7 @@ export default function ShareTab({ game, qrDataUrl, copiedField, onCopy }) {
     <section className="card stack" role="tabpanel" id="panel-share" aria-labelledby="tab-share">
       <h2>Share this game</h2>
       <p className="small">
-        Anyone with the invite link joins instantly if they&apos;re already signed in to Hivemind — otherwise
+        Anyone with the invite link joins instantly if they&apos;re already signed in to Hivemind. Otherwise
         they&apos;ll be asked to sign in or create an account first.
       </p>
       <label className="stack">
