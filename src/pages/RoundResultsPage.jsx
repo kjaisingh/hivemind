@@ -4,29 +4,24 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
-function normalizeAnswer(answer) {
-  return answer
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .map((word) => (word.endsWith('s') && word.length > 3 ? word.slice(0, -1) : word))
-    .join(' ');
-}
-
 export default function RoundResultsPage() {
   const { gameId, roundId } = useParams();
   const { user } = useAuth();
   const [round, setRound] = useState(null);
   const [error, setError] = useState('');
+  const [isDark, setIsDark] = useState(() => document.documentElement.getAttribute('data-theme') === 'dark');
 
   useEffect(() => {
     api(`/api/games/${gameId}/rounds/${roundId}/results`)
       .then((data) => setRound(data.round))
       .catch((loadError) => setError(loadError.message));
   }, [gameId, roundId]);
+
+  useEffect(() => {
+    const handleThemeChange = (event) => setIsDark(event.detail === 'dark');
+    window.addEventListener('hivemind-theme-change', handleThemeChange);
+    return () => window.removeEventListener('hivemind-theme-change', handleThemeChange);
+  }, []);
 
   if (error) {
     return <div className="page"><p className="error" role="alert">{error}</p></div>;
@@ -40,7 +35,7 @@ export default function RoundResultsPage() {
     <div className="page stack-lg">
       <header className="row-between">
         <div>
-          <h1>{round.gameName} — {round.name}</h1>
+          <h1>{round.gameName}: {round.name}</h1>
           <p className="score-headline">
             Your score: {round.ownScore.totalScore} points{round.ownScore.medalAwarded ? ' 🥇' : ''}
           </p>
@@ -83,7 +78,9 @@ export default function RoundResultsPage() {
         {round.questions.length === 0 ? (
           <p>No questions in this round.</p>
         ) : round.questions.map((question) => {
-          const ownAnswer = normalizeAnswer(question.yourAnswer || '');
+          const ownAnswer = question.yourNormalizedAnswer || '';
+          const otherFill = isDark ? '#475569' : '#cbd5e1';
+          const tickFill = isDark ? '#cbd5e1' : '#666';
 
           return (
             <article className="card stack" key={question.id}>
@@ -94,14 +91,14 @@ export default function RoundResultsPage() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={question.stats}>
-                      <XAxis dataKey="displayAnswer" interval={0} tick={{ fontSize: 12 }} />
-                      <YAxis allowDecimals={false} />
+                      <XAxis dataKey="displayAnswer" interval={0} tick={{ fontSize: 12, fill: tickFill }} />
+                      <YAxis allowDecimals={false} tick={{ fill: tickFill }} />
                       <Tooltip formatter={(value, _name, payload) => [`${value} responses`, `${payload.payload.displayAnswer} (${payload.payload.percentage.toFixed(1)}%)`]} />
                       <Bar dataKey="count" radius={[8, 8, 0, 0]}>
                         {question.stats.map((stat) => (
                           <Cell
                             key={stat.id}
-                            fill={ownAnswer && normalizeAnswer(stat.displayAnswer) === ownAnswer ? '#2563eb' : '#cbd5e1'}
+                            fill={ownAnswer && stat.normalizedAnswer === ownAnswer ? '#2563eb' : otherFill}
                           />
                         ))}
                       </Bar>
