@@ -50,6 +50,8 @@ app.use('/api', roundsRoutes);
 app.use('/api', suggestionsRoutes);
 app.use('/api', emailRoutes);
 
+app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
 app.use(express.static(path.join(root, 'dist')));
 
 app.use('/api', (_req, res) => {
