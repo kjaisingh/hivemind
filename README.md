@@ -14,6 +14,7 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 
 ## Known Limitations
 - **Reminder emails are best-effort.** Requests to Resend are capped at a 10s timeout, and a failed send for one recipient is logged and skipped rather than blocking the batch or the admin's request — the dedupe record is rolled back so a later retry isn't silently swallowed.
+- **Email delivery is sandboxed to the Resend account owner until a domain is verified.** Resend rejects sends to any recipient other than the account owner's own address on accounts with no verified sending domain. To email actual players, verify a domain you control at [resend.com/domains](https://resend.com/domains) and point `SMTP_FROM` at an address on that domain.
 
 ## Feature Backlog
 - Proactive "round published" notification (email or push), instead of relying on the admin's manual reminder nudge.
