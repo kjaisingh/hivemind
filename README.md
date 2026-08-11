@@ -10,11 +10,13 @@ Hivemind is a multiplayer guessing game where the best answer is the one your gr
 - **Think Like the Hive**: Here is the catch—there are no strictly "correct" answers in the traditional sense! Your goal is to submit the exact same answer as the majority of your group. You have to put yourself in your friends' shoes and guess what the most common response will be.
 - **Reveal and Score**: Once the deadline passes, the round locks and the results are published. The game automatically groups everyone's answers together and shows a detailed breakdown, with a 🥇 medal for whoever came out on top. Your score for a question is exactly equal to the number of people who guessed the same thing—for example, if you answer "Hydrogen" and 123 other people did too, you bag 124 points!
 - **Climb the Ranks**: Every round's points are tallied up into a massive Leaderboard, with medal counts and your own row highlighted. Check your weekly stats, see where your mind diverged from the pack, and accumulate the highest total score across all the active rounds to climb the Season Standings and be crowned the ultimate Hivemind champion!
-- **Nudge Stragglers**: Admins can send a one-click reminder email to anyone who hasn't submitted answers for the active round yet.
+- **Nudge Stragglers**: Admins can send a one-click reminder email to anyone who hasn't submitted answers for the active round yet, or opt a game into automatic emails for round-open, results-live, and expiring-soon (at configurable hour thresholds) instead.
+- **Light or Dark**: A theme toggle (bottom-left) switches between light and dark mode, remembers your choice per browser, and defaults to your OS preference on first visit.
 
 ## Known Limitations
 - **Reminder emails are best-effort.** Requests to Resend are capped at a 10s timeout, and a failed send for one recipient is logged and skipped rather than blocking the batch or the admin's request — the dedupe record is rolled back so a later retry isn't silently swallowed.
 - **Email delivery is sandboxed to the Resend account owner until a domain is verified.** Resend rejects sends to any recipient other than the account owner's own address on accounts with no verified sending domain. To email actual players, verify a domain you control at [resend.com/domains](https://resend.com/domains) and point `SMTP_FROM` at an address on that domain.
+- **Automatic reminders fire on the next visit, not the exact hour mark.** Crossed-threshold checks run on a 60s interval plus opportunistically whenever anyone loads a dashboard, round, or results page. Render's free tier spins the service down after ~15min idle, so a threshold crossed while nobody's around fires as soon as the service next wakes up or someone visits. If more than one threshold was crossed while idle, only the most urgent unsent one gets emailed.
 
 ## Feature Backlog
 - Proactive "round published" notification (email or push), instead of relying on the admin's manual reminder nudge.
@@ -88,7 +90,10 @@ Seeded game includes:
 - Build Command: `npm install && npm run build`
 - Start Command: `npm start`
 - Runtime: Node 22+
+- Health Check Path: `/api/health`
 - Set env vars per [Environment Variables](#environment-variables), using the deployed Render URL instead of localhost for `BASE_URL`/`CLIENT_URL`.
+
+Both paths get a dependency-free `GET /api/health` check (`healthCheckPath` in `render.yaml` for the Blueprint path) so Render confirms the service booted before routing traffic to it. It's a deploy-health check, not a keep-alive; the free tier still spins the service down after ~15min idle.
 
 
 ## Environment Variables
