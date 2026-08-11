@@ -327,7 +327,7 @@ router.post('/games/:gameId/rounds/:roundId/remind', requireAuth, emailLimiter, 
       recipient: user,
       emailType: 'MANUAL_REMINDER',
       subject: `${game.name}: don't forget ${round.name}`,
-      intro: 'Friendly nudge from your game admin — you still have unanswered questions in this round.',
+      intro: 'Friendly nudge from your game admin. You still have unanswered questions in this round.',
       gameName: game.name,
     });
   }
@@ -371,6 +371,7 @@ router.get('/games/:gameId/rounds/:roundId/results', requireAuth, async (req, re
         id: question.id,
         prompt: question.prompt,
         yourAnswer: question.submissions[0]?.rawAnswer || '',
+        yourNormalizedAnswer: normalizeAnswer(question.submissions[0]?.rawAnswer || ''),
         stats: question.answerStats,
       })),
     },
