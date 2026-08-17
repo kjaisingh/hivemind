@@ -165,3 +165,9 @@ alter table public."GameEmailSettings" enable row level security;
 alter table public."EmailDeliveryLog" enable row level security;
 alter table public."Session" enable row level security;
 alter table public."QuestionSuggestion" enable row level security;
+
+-- Keepalive: Supabase free tier pauses projects idle 7+ days. Run this once
+-- in the Supabase SQL editor so the project always shows activity, independent
+-- of whether the app server (Render) is awake.
+-- create extension if not exists pg_cron;
+-- select cron.schedule('keepalive', '0 0 */3 * *', $$ select 1 $$);
