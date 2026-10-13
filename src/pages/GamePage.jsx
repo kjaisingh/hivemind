@@ -1,10 +1,10 @@
 import dayjs from 'dayjs';
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/auth';
-import { GAME_TABS, GAME_TAB_LABELS } from '../lib/gameTabs';
+import { GAME_TABS, GAME_TAB_LABELS, resolveGameTab } from '../lib/gameTabs';
 import ActiveRoundTab from '../components/game/ActiveRoundTab';
 import LeaderboardTab from '../components/game/LeaderboardTab';
 import HistoryTab from '../components/game/HistoryTab';
@@ -22,8 +22,17 @@ function defaultRoundForm() {
   };
 }
 
+function defaultEmailSettings() {
+  return { autoRoundOpen: true, autoResultsLive: true, expiringHours: [] };
+}
+
+function defaultManualEmail() {
+  return { subject: '', message: '' };
+}
+
 export default function GamePage() {
   const { gameId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
 
   const [game, setGame] = useState(null);
@@ -34,8 +43,8 @@ export default function GamePage() {
   const [roundForm, setRoundForm] = useState(defaultRoundForm());
   const [announcement, setAnnouncement] = useState('');
   const [draftToPublish, setDraftToPublish] = useState('');
-  const [emailSettings, setEmailSettings] = useState({ autoRoundOpen: true, autoResultsLive: true, expiringHours: [] });
-  const [manualEmail, setManualEmail] = useState({ subject: '', message: '' });
+  const [emailSettings, setEmailSettings] = useState(defaultEmailSettings);
+  const [manualEmail, setManualEmail] = useState(defaultManualEmail);
   const [roundExpired, setRoundExpired] = useState(false);
   const [savingAnswers, setSavingAnswers] = useState(false);
   const [creatingRound, setCreatingRound] = useState(false);
@@ -57,6 +66,7 @@ export default function GamePage() {
   const [answersDirty, setAnswersDirty] = useState(false);
 
   const loadGameRequestRef = useRef(0);
+  const copyTimerRef = useRef(null);
   const answersDirtyRef = useRef(false);
   const loadedRoundIdRef = useRef(null);
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
@@ -67,6 +77,7 @@ export default function GamePage() {
       const data = await api(`/api/games/${gameId}`);
       if (requestId !== loadGameRequestRef.current) return;
 
+      setError('');
       setGame(data.game);
       const incomingRoundId = data.game.activeRound?.id || null;
       if (!answersDirtyRef.current || loadedRoundIdRef.current !== incomingRoundId) {
@@ -85,16 +96,17 @@ export default function GamePage() {
         draftRounds.some((round) => round.id === current) ? current : (draftRounds[0]?.id || ''),
       );
 
-      if (data.game.emailSettings) {
-        setEmailSettings({
-          autoRoundOpen: data.game.emailSettings.autoRoundOpen,
-          autoResultsLive: data.game.emailSettings.autoResultsLive,
-          expiringHours: (data.game.emailSettings.expiringHoursCsv || '')
+      const incomingEmailSettings = data.game.emailSettings;
+      setEmailSettings(incomingEmailSettings
+        ? {
+          autoRoundOpen: incomingEmailSettings.autoRoundOpen,
+          autoResultsLive: incomingEmailSettings.autoResultsLive,
+          expiringHours: (incomingEmailSettings.expiringHoursCsv || '')
             .split(',')
             .filter(Boolean)
             .map(Number),
-        });
-      }
+        }
+        : defaultEmailSettings());
 
       if (data.game.role === 'ADMIN') {
         const suggestionsData = await api(`/api/games/${gameId}/suggestions`);
@@ -120,11 +132,33 @@ export default function GamePage() {
     setStatus('');
     setError('');
     setRoundForm(defaultRoundForm());
+    setAnnouncement('');
     setEditingRoundId(null);
     setDraftToPublish('');
+    setEmailSettings(defaultEmailSettings());
+    setManualEmail(defaultManualEmail());
+    setRoundExpired(false);
+    setSavingAnswers(false);
+    setCreatingRound(false);
+    setPublishing(false);
+    setSavingEmailSettings(false);
+    setSendingEmail(false);
+    setRemindingPlayers(false);
     setSuggestions([]);
+    setSuggestionPrompt('');
+    setSubmittingSuggestion(false);
+    setPromoteTargets({});
+    setCopiedField(null);
+    setQrDataUrl(null);
+    setDismissingSuggestionId(null);
+    setPromotingSuggestionId(null);
     setProgress(null);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
   }, [gameId]);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
 
   useEffect(() => {
     void loadGame();
@@ -179,10 +213,49 @@ export default function GamePage() {
     };
   }, [gameId, game?.activeRound?.id]);
 
+  useEffect(() => {
+    if (!answersDirty) return undefined;
+    const warnBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [answersDirty]);
+
   const visibleTabs = useMemo(
     () => GAME_TABS.filter((tab) => tab !== 'manage' || game?.role === 'ADMIN'),
     [game?.role],
   );
+
+  useEffect(() => {
+    if (!game) return;
+    const requestedTab = resolveGameTab(searchParams.get('tab'), game.role === 'ADMIN');
+    setActiveTab(requestedTab);
+    if (searchParams.get('tab') !== requestedTab) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('tab', requestedTab);
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [game, searchParams, setSearchParams]);
+
+  function confirmDiscardAnswers() {
+    return !answersDirtyRef.current || window.confirm('Discard your unsaved answers?');
+  }
+
+  function selectTab(tab) {
+    if (tab === activeTab) return true;
+    if (!confirmDiscardAnswers()) return false;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', tab);
+    setSearchParams(nextParams);
+    setActiveTab(tab);
+    return true;
+  }
+
+  function handlePageLink(event) {
+    if (!confirmDiscardAnswers()) event.preventDefault();
+  }
 
   function resetRoundForm() {
     setEditingRoundId(null);
@@ -206,8 +279,9 @@ export default function GamePage() {
         ? visibleTabs.length - 1
         : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + visibleTabs.length) % visibleTabs.length;
     const nextTab = visibleTabs[nextIndex];
-    setActiveTab(nextTab);
-    event.currentTarget.parentElement.querySelector(`#tab-${nextTab}`)?.focus();
+    if (selectTab(nextTab)) {
+      event.currentTarget.parentElement.querySelector(`#tab-${nextTab}`)?.focus();
+    }
   }
 
   function startEditRound(round) {
@@ -260,7 +334,7 @@ export default function GamePage() {
     event.preventDefault();
     setError('');
 
-    if (dayjs(roundForm.expiresAt).isBefore(dayjs(roundForm.startsAt))) {
+    if (!dayjs(roundForm.expiresAt).isAfter(dayjs(roundForm.startsAt))) {
       setError('Expiry must be after the start time.');
       return;
     }
@@ -320,7 +394,7 @@ export default function GamePage() {
         method: 'POST',
         body: JSON.stringify({ announcement }),
       });
-      setStatus('Round published. Emails are on the way.');
+      setStatus('Round published.');
       setAnnouncement('');
       await loadGame();
     } catch (err) {
@@ -357,7 +431,7 @@ export default function GamePage() {
         setError(`Sent ${result.sentCount} of ${result.totalCount} emails. ${result.failedCount} failed.`);
       } else {
         setStatus(`Sent ${result.sentCount} email${result.sentCount === 1 ? '' : 's'}.`);
-        setManualEmail({ subject: '', message: '' });
+        setManualEmail(defaultManualEmail());
       }
     } catch (err) {
       setError(err.message || 'Failed to send email');
@@ -454,7 +528,8 @@ export default function GamePage() {
     try {
       await navigator.clipboard.writeText(value);
       setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopiedField(null), 2000);
     } catch {
       setError('Could not copy to clipboard.');
     }
@@ -462,20 +537,21 @@ export default function GamePage() {
 
   if (error && !game) {
     return (
-      <div className="page stack">
-        <p className="error">{error}</p>
-        <Link className="button" to="/dashboard">
-          Back to dashboard
-        </Link>
-      </div>
+      <main className="page narrow stack">
+        <p className="error" role="alert">{error}</p>
+        <div className="row gap-sm">
+          <button className="button" type="button" onClick={loadGame}>Try again</button>
+          <Link className="button button-secondary" to="/dashboard">Back to dashboard</Link>
+        </div>
+      </main>
     );
   }
 
   if (!game) {
     return (
-      <div className="page">
-        <p>Loading game...</p>
-      </div>
+      <main className="page" aria-busy="true">
+        <p role="status">Loading game...</p>
+      </main>
     );
   }
 
@@ -487,7 +563,7 @@ export default function GamePage() {
           <p>{game.description}</p>
           <span className="badge">Code: {game.code}</span>
         </div>
-        <Link className="button button-secondary" to="/dashboard">
+        <Link className="button button-secondary" to="/dashboard" onClick={handlePageLink}>
           Back
         </Link>
       </div>
@@ -502,7 +578,7 @@ export default function GamePage() {
             aria-controls={`panel-${tab}`}
             tabIndex={activeTab === tab ? 0 : -1}
             className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => selectTab(tab)}
             onKeyDown={handleTabKeyDown}
             type="button"
           >
@@ -571,6 +647,7 @@ export default function GamePage() {
           onEditRound={startEditRound}
           onDeleteRound={deleteRound}
           deletingRoundId={deletingRoundId}
+          emailConfigured={game.emailConfigured}
           emailSettings={emailSettings}
           setEmailSettings={setEmailSettings}
           onToggleHour={toggleHour}

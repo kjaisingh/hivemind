@@ -11,9 +11,9 @@ export default function JoinPage() {
   useEffect(() => {
     async function join() {
       try {
-        const data = await api(`/api/join/${inviteToken}`);
+        const data = await api(`/api/join/${encodeURIComponent(inviteToken)}`);
         if (data.requiresAuth) {
-          navigate(`/auth?invite=${inviteToken}`);
+          navigate(`/auth?invite=${encodeURIComponent(inviteToken)}`);
           return;
         }
         navigate(`/games/${data.gameId}`);

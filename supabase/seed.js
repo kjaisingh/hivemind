@@ -55,7 +55,7 @@ async function main() {
       .insert({
         name: 'Office Banter League',
         description: 'Subjective questions for people who definitely should be working.',
-        code: 'HIV-001',
+        code: 'HIV-222',
         inviteToken: 'office-banter-001',
         adminId: demoUser.id,
       })

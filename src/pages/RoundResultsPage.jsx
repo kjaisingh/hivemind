@@ -42,9 +42,12 @@ export default function RoundResultsPage() {
         <div>
           <h1>{round.gameName}: {round.name}</h1>
           <p className="score-headline">
-            Your score: {round.ownScore.totalScore} points{round.ownScore.medalAwarded ? ' 🥇' : ''}
+            Your score: {round.ownScore.totalScore} {round.ownScore.totalScore === 1 ? 'point' : 'points'}
+            {round.ownScore.medalAwarded ? (
+              <span aria-label="Medal awarded"> <span aria-hidden="true">🥇</span></span>
+            ) : ''}
           </p>
-          <p className="small">Weekly rank: #{round.ownScore.rank}</p>
+          <p className="small">Round rank: #{round.ownScore.rank}</p>
         </div>
         <Link className="button button-secondary" to={`/games/${gameId}`}>Back to game</Link>
       </header>
@@ -53,6 +56,7 @@ export default function RoundResultsPage() {
         <h2>Round Leaderboard</h2>
         <div className="table-wrap">
           <table>
+            <caption className="sr-only">Round leaderboard for {round.name}</caption>
             <thead>
               <tr>
                 <th>Rank</th>
@@ -70,7 +74,7 @@ export default function RoundResultsPage() {
                     <td>{row.rank}</td>
                     <td>{row.username}</td>
                     <td>{row.totalScore}</td>
-                    <td>{row.medalAwarded ? '🥇' : ''}</td>
+                    <td>{row.medalAwarded ? <span aria-label="Medal awarded" role="img">🥇</span> : '—'}</td>
                   </tr>
                 ))
               )}
@@ -93,7 +97,7 @@ export default function RoundResultsPage() {
               <p><strong>Your answer:</strong> <span className="highlight">{question.yourAnswer || 'No answer submitted'}</span></p>
 
               {question.stats.length === 0 ? <p>No answers submitted for this question.</p> : (
-                <div className="chart-wrap">
+                <div className="chart-wrap" aria-hidden="true">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={question.stats}>
                       <XAxis dataKey="displayAnswer" interval={0} tick={{ fontSize: 12, fill: tickFill }} />

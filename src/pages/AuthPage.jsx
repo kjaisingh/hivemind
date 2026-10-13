@@ -29,6 +29,12 @@ export default function AuthPage() {
       return;
     }
 
+    if (new TextEncoder().encode(form.password).length > 72) {
+      setError('Password must be 72 bytes or fewer.');
+      setSubmitting(false);
+      return;
+    }
+
     const path = isSignup ? '/api/auth/signup' : '/api/auth/login';
     const body = isSignup
       ? { email: form.email, username: form.username, password: form.password }
@@ -43,7 +49,7 @@ export default function AuthPage() {
 
       if (invite || data.pendingInviteToken) {
         const inviteToken = invite || data.pendingInviteToken;
-        const joined = await api(`/api/join/${inviteToken}`);
+        const joined = await api(`/api/join/${encodeURIComponent(inviteToken)}`);
         if (!joined.requiresAuth) {
           navigate(`/games/${joined.gameId}`);
           return;
@@ -65,53 +71,59 @@ export default function AuthPage() {
         <p>Use your username on all leaderboards. Keep it iconic.</p>
 
         <form className="stack" onSubmit={handleSubmit}>
-          <input
-            aria-label="Email address"
-            placeholder="Email"
-            type="email"
-            autoComplete="email"
-            value={form.email}
-            onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-            required
-          />
-
-          {isSignup && (
+          <label className="field stack-xs">
+            <span>Email</span>
             <input
-              aria-label="Username"
-              placeholder="Username (letters, numbers, underscore)"
-              autoComplete="username"
-              minLength={3}
-              maxLength={24}
-              value={form.username}
-              onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+              placeholder="you@example.com"
+              type="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
               required
             />
+          </label>
+
+          {isSignup && (
+            <label className="field stack-xs">
+              <span>Username</span>
+              <input
+                placeholder="Letters, numbers, and underscores"
+                autoComplete="username"
+                minLength={3}
+                maxLength={24}
+                value={form.username}
+                onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                required
+              />
+            </label>
           )}
 
-          <input
-            aria-label="Password"
-            placeholder="Password"
-            type="password"
-            autoComplete={isSignup ? 'new-password' : 'current-password'}
-            minLength={isSignup ? 8 : 1}
-            maxLength={72}
-            value={form.password}
-            onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-            required
-          />
-
-          {isSignup && (
+          <label className="field stack-xs">
+            <span>Password</span>
             <input
-              aria-label="Confirm password"
-              placeholder="Confirm password"
+              placeholder={isSignup ? 'At least 8 characters' : 'Your password'}
               type="password"
-              autoComplete="new-password"
-              minLength={8}
-              maxLength={72}
-              value={form.confirmPassword}
-              onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              minLength={isSignup ? 8 : 1}
+              value={form.password}
+              onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
               required
             />
+          </label>
+
+          {isSignup && (
+            <label className="field stack-xs">
+              <span>Confirm password</span>
+              <input
+                placeholder="Repeat your password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={form.confirmPassword}
+                onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                required
+              />
+            </label>
           )}
 
           <button className="button" type="submit" disabled={submitting}>

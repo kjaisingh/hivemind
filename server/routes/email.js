@@ -55,7 +55,7 @@ router.post('/games/:gameId/email/manual', requireAuth, emailLimiter, async (req
   }
   const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', req.params.gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const users = userIds.length ? unwrap(await supabase.from('User').select('id,email').in('id', userIds)) : [];
 
   let sentCount = 0;
   let skippedCount = 0;
@@ -72,7 +72,10 @@ router.post('/games/:gameId/email/manual', requireAuth, emailLimiter, async (req
       else skippedCount += 1;
     } catch (error) {
       failedCount += 1;
-      console.error('[email]', 'manual', user.email, error);
+      console.error('[email] Manual delivery failed.', {
+        retryable: error.retryable !== false,
+        status: error.status || null,
+      });
     }
   }
 

@@ -19,10 +19,10 @@ test('duplicate email is rejected with an error message', async ({ page }) => {
   await expect(page).toHaveURL(/\/$|\/auth/);
 
   await page.goto('/auth');
-  await page.getByPlaceholder('Email').fill(email);
-  await page.getByPlaceholder('Username (letters, numbers, underscore)').fill(uniqueUsername('dup2'));
-  await page.getByPlaceholder('Password', { exact: true }).fill('another-password');
-  await page.getByPlaceholder('Confirm password').fill('another-password');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(uniqueUsername('dup2'));
+  await page.getByLabel('Password', { exact: true }).fill('another-password');
+  await page.getByLabel('Confirm password').fill('another-password');
   await page.getByRole('button', { name: 'Sign up' }).click();
 
   await expect(page.locator('.error')).toBeVisible();

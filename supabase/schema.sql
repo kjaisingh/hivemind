@@ -53,6 +53,7 @@ create table if not exists public."Round" (
 );
 
 create index if not exists "Round_gameId_idx" on public."Round" ("gameId");
+create index if not exists "Round_status_expiresAt_idx" on public."Round" (status, "expiresAt");
 create unique index if not exists "Round_one_active_per_game_idx"
   on public."Round" ("gameId") where status = 'ACTIVE';
 

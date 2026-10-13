@@ -11,7 +11,6 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
-      globals: { ...globals.browser, ...globals.node },
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
     settings: { react: { version: 'detect' } },
@@ -32,5 +31,17 @@ export default [
       'react-hooks/preserve-manual-memoization': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
+  },
+  {
+    files: ['src/**/*.{js,jsx}', 'public/**/*.js'],
+    languageOptions: { globals: globals.browser },
+  },
+  {
+    files: ['server/**/*.js', 'supabase/**/*.js', 'tests/**/*.js', '*.{config,setup}.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['tests/ui-smoke.spec.js'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
 ];

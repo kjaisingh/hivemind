@@ -26,7 +26,7 @@ test('differentiated answers produce split scores, a rank break, and a no-answer
   const code = await adminPage.getByLabel('Game code').inputValue();
 
   for (const p of [bPage, cPage]) {
-    await p.getByPlaceholder('Enter game code (ABC-123)').fill(code);
+    await p.getByPlaceholder('Enter game code (ABC-234)').fill(code);
     await p.getByRole('button', { name: 'Join' }).click();
     await expect(p).toHaveURL(new RegExp(`/games/${gameId}$`));
   }
@@ -76,11 +76,11 @@ test('differentiated answers produce split scores, a rank break, and a no-answer
   // Admin and B each score 2 (color) + 1 (own unique season) = 3, tied for rank 1 with a medal.
   // C scores 1 (color) + 0 (no season submission) = 1, alone at rank 3, no medal.
   await expect(adminPage.getByText('Your score: 3 points')).toBeVisible();
-  await expect(adminPage.getByText(/Weekly rank: #1/)).toBeVisible();
+  await expect(adminPage.getByText(/Round rank: #1/)).toBeVisible();
   await expect(bPage.getByText('Your score: 3 points')).toBeVisible();
-  await expect(bPage.getByText(/Weekly rank: #1/)).toBeVisible();
-  await expect(cPage.getByText('Your score: 1 points')).toBeVisible();
-  await expect(cPage.getByText(/Weekly rank: #3/)).toBeVisible();
+  await expect(bPage.getByText(/Round rank: #1/)).toBeVisible();
+  await expect(cPage.getByText('Your score: 1 point')).toBeVisible();
+  await expect(cPage.getByText(/Round rank: #3/)).toBeVisible();
 
   await expect(cPage.getByText('No answer submitted')).toBeVisible();
 

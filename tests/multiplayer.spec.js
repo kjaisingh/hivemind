@@ -28,7 +28,7 @@ test('two players who answer identically tie for rank 1 and both earn a medal', 
   const code = await adminPage.getByLabel('Game code').inputValue();
 
   // Player joins by code via the real UI form.
-  await playerPage.getByPlaceholder('Enter game code (ABC-123)').fill(code);
+  await playerPage.getByPlaceholder('Enter game code (ABC-234)').fill(code);
   await playerPage.getByRole('button', { name: 'Join' }).click();
   await expect(playerPage).toHaveURL(new RegExp(`/games/${gameId}$`));
 
@@ -76,8 +76,8 @@ test('two players who answer identically tie for rank 1 and both earn a medal', 
 
   await expect(adminPage.getByText('Your score: 4 points')).toBeVisible();
   await expect(playerPage.getByText('Your score: 4 points')).toBeVisible();
-  await expect(adminPage.getByText(/Weekly rank: #1/)).toBeVisible();
-  await expect(playerPage.getByText(/Weekly rank: #1/)).toBeVisible();
+  await expect(adminPage.getByText(/Round rank: #1/)).toBeVisible();
+  await expect(playerPage.getByText(/Round rank: #1/)).toBeVisible();
 
   await expect(adminPage.getByRole('cell', { name: admin.username })).toBeVisible();
   await expect(adminPage.getByRole('cell', { name: player.username })).toBeVisible();

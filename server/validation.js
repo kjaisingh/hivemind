@@ -1,11 +1,16 @@
 import { z } from 'zod';
 
+const passwordSchema = (minimum = 1) => z
+  .string()
+  .min(minimum, minimum === 1 ? 'Password is required.' : `Password must be at least ${minimum} characters.`)
+  .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'Password must be 72 bytes or fewer.');
+
 const trimmedString = (minimum, maximum, label) =>
   z.string().trim().min(minimum, `${label} is required.`).max(maximum, `${label} must be ${maximum} characters or fewer.`);
 
 export const loginSchema = z.object({
   email: z.string().trim().email('Enter a valid email address.').toLowerCase(),
-  password: z.string().min(1, 'Password is required.').max(72, 'Password must be 72 characters or fewer.'),
+  password: passwordSchema(),
 });
 
 export const signUpSchema = loginSchema.extend({
@@ -15,7 +20,7 @@ export const signUpSchema = loginSchema.extend({
     .min(3, 'Username must be at least 3 characters.')
     .max(24, 'Username must be 24 characters or fewer.')
     .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.').max(72, 'Password must be 72 characters or fewer.'),
+  password: passwordSchema(8),
 });
 
 export const gameSchema = z.object({

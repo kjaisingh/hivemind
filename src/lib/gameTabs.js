@@ -8,3 +8,9 @@ export const GAME_TAB_LABELS = {
   suggest: 'Suggest a Question',
   manage: 'Manage Game',
 };
+
+export function resolveGameTab(value, isAdmin) {
+  if (!GAME_TABS.includes(value)) return 'active';
+  if (value === 'manage' && !isAdmin) return 'active';
+  return value;
+}

@@ -1,10 +1,21 @@
-// Resend's SMTP transport shares infra with Render's free-tier outbound
-// network, which intermittently times out raw SMTP socket/TLS handshakes.
-// Resend's HTTPS API uses the same credential (SMTP_PASS *is* the Resend
-// API key) over a plain fetch, sidestepping that flakiness entirely.
-const RESEND_API_KEY = process.env.SMTP_PASS;
-const hasResend = Boolean(RESEND_API_KEY && process.env.SMTP_FROM);
 const REQUEST_TIMEOUT_MS = 10_000;
+
+export class EmailDeliveryError extends Error {
+  constructor(message, { retryable, status } = {}) {
+    super(message);
+    this.name = 'EmailDeliveryError';
+    this.retryable = retryable;
+    this.status = status;
+  }
+}
+
+function getResendApiKey() {
+  return process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+}
+
+export function isEmailConfigured() {
+  return Boolean(getResendApiKey() && process.env.SMTP_FROM);
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -27,12 +38,16 @@ function buildEmail(subject, intro, gameName, ctaLink) {
   `;
 }
 
+function buildTextEmail(intro, gameName, ctaLink) {
+  return `${intro}\n\nYou are receiving this because you are part of ${gameName}.\n\nOpen Hivemind: ${ctaLink}`;
+}
+
 export async function sendEmail({ to, subject, intro, gameName }) {
-  const appUrl = process.env.CLIENT_URL || process.env.BASE_URL || 'http://localhost:5173';
+  const appUrl = process.env.CLIENT_URL || process.env.BASE_URL || 'http://localhost:5183';
   const html = buildEmail(subject, intro, gameName, appUrl);
 
-  if (!hasResend) {
-    console.log('[email:mock]', { to, subject, intro });
+  if (!isEmailConfigured()) {
+    console.info('[email] Delivery skipped because Resend is not configured.');
     return false;
   }
 
@@ -44,7 +59,7 @@ export async function sendEmail({ to, subject, intro, gameName }) {
     response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
+        Authorization: `Bearer ${getResendApiKey()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -52,21 +67,25 @@ export async function sendEmail({ to, subject, intro, gameName }) {
         to,
         subject,
         html,
+        text: buildTextEmail(intro, gameName, appUrl),
       }),
       signal: controller.signal,
     });
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error('Email send timed out');
+      throw new EmailDeliveryError('Email send timed out', { retryable: true });
     }
-    throw err;
+    throw new EmailDeliveryError(err.message || 'Email request failed', { retryable: true });
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(`Message failed: ${response.status} ${body.message || response.statusText}`);
+    throw new EmailDeliveryError(`Message failed: ${response.status} ${body.message || response.statusText}`, {
+      retryable: response.status === 429 || response.status >= 500,
+      status: response.status,
+    });
   }
   return true;
 }
