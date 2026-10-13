@@ -4,7 +4,11 @@ const STORAGE_KEY = 'hivemind-theme';
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem(STORAGE_KEY, theme);
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // Storage can be unavailable in privacy-restricted browsing contexts.
+  }
   window.dispatchEvent(new CustomEvent('hivemind-theme-change', { detail: theme }));
 }
 

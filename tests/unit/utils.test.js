@@ -2,13 +2,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import dayjs from 'dayjs';
 import { formatTimeRemaining, getUrgencyTier } from '../../src/lib/countdown.js';
-import { normalizeAnswer, rankByPoints, safeDisplayAnswer, toHoursArray } from '../../server/utils.js';
+import { buildScoreRows, normalizeAnswer, rankByPoints, safeDisplayAnswer, toHoursArray } from '../../server/utils.js';
+import { formatJoinCode } from '../../src/lib/joinCode.js';
+import { resolveGameTab } from '../../src/lib/gameTabs.js';
 
 test('normalizeAnswer ignores case, punctuation, spacing, and simple plurals', () => {
   assert.equal(normalizeAnswer('  Cats!!!  '), 'cat');
   assert.equal(normalizeAnswer('New   York'), 'new york');
   assert.equal(normalizeAnswer('CAFÉ'), 'café');
   assert.equal(normalizeAnswer('東京！'), '東京');
+});
+
+test('normalizeAnswer does not corrupt words that merely end in s', () => {
+  assert.equal(normalizeAnswer('bus glass analysis'), 'bus glass analysis');
+});
+
+test('join codes format as users type and tabs reject inaccessible values', () => {
+  assert.equal(formatJoinCode('abc234'), 'ABC-234');
+  assert.equal(formatJoinCode('abc-234-extra'), 'ABC-234');
+  assert.equal(formatJoinCode('i1o0'), '');
+  assert.equal(resolveGameTab('history', false), 'history');
+  assert.equal(resolveGameTab('manage', false), 'active');
+  assert.equal(resolveGameTab('manage', true), 'manage');
+  assert.equal(resolveGameTab('unknown', true), 'active');
 });
 
 test('safeDisplayAnswer preserves text while collapsing whitespace', () => {
@@ -33,4 +49,19 @@ test('season ranking gives tied scores the same competition rank', () => {
     { username: 'lee', points: 4 },
   ]);
   assert.deepEqual(ranked.map(({ username, rank }) => [username, rank]), [['amy', 1], ['zara', 1], ['lee', 3]]);
+});
+
+test('round scoring awards medals only to positive first-place scores', () => {
+  const zeroRows = buildScoreRows('round-1', new Map([['player-a', 0], ['player-b', 0]]));
+  assert.deepEqual(zeroRows.map(({ rank, medalAwarded }) => ({ rank, medalAwarded })), [
+    { rank: 1, medalAwarded: false },
+    { rank: 1, medalAwarded: false },
+  ]);
+
+  const positiveRows = buildScoreRows('round-1', new Map([['player-a', 4], ['player-b', 4], ['player-c', 1]]));
+  assert.deepEqual(positiveRows.map(({ rank, medalAwarded }) => ({ rank, medalAwarded })), [
+    { rank: 1, medalAwarded: true },
+    { rank: 1, medalAwarded: true },
+    { rank: 3, medalAwarded: false },
+  ]);
 });

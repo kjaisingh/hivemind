@@ -28,10 +28,10 @@ test('anonymous visitor who clicks an invite link signs up and lands directly in
   await visitorPage.goto(invitePath);
   await expect(visitorPage).toHaveURL(/\/auth\?invite=/);
 
-  await visitorPage.getByPlaceholder('Email').fill(visitor.email);
-  await visitorPage.getByPlaceholder('Username (letters, numbers, underscore)').fill(visitor.username);
-  await visitorPage.getByPlaceholder('Password', { exact: true }).fill(visitor.password);
-  await visitorPage.getByPlaceholder('Confirm password').fill(visitor.password);
+  await visitorPage.getByLabel('Email').fill(visitor.email);
+  await visitorPage.getByLabel('Username').fill(visitor.username);
+  await visitorPage.getByLabel('Password', { exact: true }).fill(visitor.password);
+  await visitorPage.getByLabel('Confirm password').fill(visitor.password);
   await visitorPage.getByRole('button', { name: 'Sign up' }).click();
 
   await expect(visitorPage).toHaveURL(new RegExp(`/games/${gameId}$`));

@@ -32,8 +32,14 @@ export default function ActiveRoundTab({
             <div className="stack stack-end">
               <Countdown expiresAt={game.activeRound.expiresAt} onExpire={onExpire} />
               {game.role === 'ADMIN' && !roundExpired && (
-                <button className="button button-secondary" type="button" onClick={onRemind} disabled={remindingPlayers}>
-                  {remindingPlayers ? 'Reminding...' : 'Remind pending players'}
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={onRemind}
+                  disabled={remindingPlayers || !game.emailConfigured}
+                  title={!game.emailConfigured ? 'Configure Resend to send email reminders.' : undefined}
+                >
+                  {!game.emailConfigured ? 'Email not configured' : remindingPlayers ? 'Reminding...' : 'Remind pending players'}
                 </button>
               )}
             </div>
@@ -62,7 +68,7 @@ export default function ActiveRoundTab({
                       className="link clear-answer"
                       type="button"
                       onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: '' }))}
-                      disabled={savingAnswers}
+                      disabled={roundExpired || savingAnswers}
                     >
                       Clear answer
                     </button>

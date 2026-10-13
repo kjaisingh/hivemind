@@ -228,10 +228,22 @@ router.delete('/games/:gameId/rounds/:roundId', requireAuth, async (req, res) =>
     return res.status(404).json({ message: 'Round not found.' });
   }
   if (existing.status !== 'DRAFT') {
-    return res.status(400).json({ message: 'Only draft rounds can be deleted.' });
+    return res.status(409).json({ message: 'Only draft rounds can be deleted.' });
   }
 
-  unwrap(await supabase.from('Round').delete().eq('id', req.params.roundId));
+  const deleted = unwrap(
+    await supabase
+      .from('Round')
+      .delete()
+      .eq('id', req.params.roundId)
+      .eq('gameId', req.params.gameId)
+      .eq('status', 'DRAFT')
+      .select('id')
+      .maybeSingle(),
+  );
+  if (!deleted) {
+    return res.status(409).json({ message: 'Round is no longer a draft.' });
+  }
 
   res.json({ ok: true });
 });
@@ -318,7 +330,7 @@ router.post('/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, r
   if (emailSettings?.autoRoundOpen) {
     const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
     const userIds = memberships.map((membership) => membership.userId);
-    const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+    const users = userIds.length ? unwrap(await supabase.from('User').select('id,email').in('id', userIds)) : [];
 
     for (const user of users) {
       await sendWithDedup(supabase, {
@@ -371,7 +383,7 @@ router.post('/games/:gameId/rounds/:roundId/remind', requireAuth, emailLimiter, 
 
   const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const users = userIds.length ? unwrap(await supabase.from('User').select('id,email').in('id', userIds)) : [];
 
   const pendingUsers = users.filter(
     (user) => !questionIds.every((questionId) => submittedPairs.has(`${user.id}:${questionId}`)),

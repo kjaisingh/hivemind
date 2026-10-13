@@ -20,6 +20,7 @@ export default function ManageTab({
   onEditRound,
   onDeleteRound,
   deletingRoundId,
+  emailConfigured,
   emailSettings,
   setEmailSettings,
   onToggleHour,
@@ -57,6 +58,12 @@ export default function ManageTab({
         />
 
         <h2>Email Automation</h2>
+        {!emailConfigured && (
+          <p className="warning" role="status">
+            Email delivery is off. Add <code>RESEND_API_KEY</code> and <code>SMTP_FROM</code> to enable reminders
+            and announcements.
+          </p>
+        )}
         <EmailAutomationForm
           emailSettings={emailSettings}
           setEmailSettings={setEmailSettings}
@@ -70,6 +77,7 @@ export default function ManageTab({
           manualEmail={manualEmail}
           setManualEmail={setManualEmail}
           sendingEmail={sendingEmail}
+          emailConfigured={emailConfigured}
           onSubmit={onSendManualEmail}
         />
       </div>

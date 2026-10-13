@@ -29,11 +29,11 @@ router.post('/auth/signup', signupLimiter, async (req, res) => {
   }
 
   const { email, username, password } = parsed.data;
-  const existingEmail = unwrap(await supabase.from('User').select('*').eq('email', email).maybeSingle());
+  const existingEmail = unwrap(await supabase.from('User').select('id').eq('email', email).maybeSingle());
   if (existingEmail) {
     return res.status(400).json({ message: 'An account with that email already exists.' });
   }
-  const existingUsername = unwrap(await supabase.from('User').select('*').eq('username', username).maybeSingle());
+  const existingUsername = unwrap(await supabase.from('User').select('id').eq('username', username).maybeSingle());
   if (existingUsername) {
     return res.status(400).json({ message: 'That username is already taken.' });
   }

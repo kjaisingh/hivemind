@@ -63,7 +63,7 @@ export async function getGameDetail(supabase, gameId) {
 
   const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const users = userIds.length ? unwrap(await supabase.from('User').select('id,username').in('id', userIds)) : [];
   const usersById = new Map(users.map((user) => [user.id, user]));
 
   const rounds = unwrap(
@@ -130,7 +130,7 @@ export async function getRoundResults(supabase, roundId, gameId, userId) {
   );
   const scoreUserIds = scores.map((score) => score.userId);
   const scoreUsers = scoreUserIds.length
-    ? unwrap(await supabase.from('User').select('*').in('id', scoreUserIds))
+    ? unwrap(await supabase.from('User').select('id,username').in('id', scoreUserIds))
     : [];
   const usersById = new Map(scoreUsers.map((user) => [user.id, user]));
 
@@ -180,7 +180,7 @@ export async function getRoundScoringData(supabase, roundId) {
 
   const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const players = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const players = userIds.length ? unwrap(await supabase.from('User').select('id,username').in('id', userIds)) : [];
 
   const questions = unwrap(
     await supabase.from('Question').select('*').eq('roundId', roundId).order('position', { ascending: true }),
@@ -217,7 +217,7 @@ async function attachGameContext(supabase, rounds, { withQuestions = false } = {
 
   const memberships = unwrap(await supabase.from('GameMembership').select('*').in('gameId', gameIds));
   const userIds = [...new Set(memberships.map((membership) => membership.userId))];
-  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const users = userIds.length ? unwrap(await supabase.from('User').select('id,email,username').in('id', userIds)) : [];
   const usersById = new Map(users.map((user) => [user.id, user]));
 
   const membershipsByGame = new Map();
@@ -263,7 +263,7 @@ export async function getSuggestionsForGame(supabase, gameId) {
       .order('createdAt', { ascending: false }),
   );
   const userIds = [...new Set(suggestions.map((suggestion) => suggestion.submittedById))];
-  const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
+  const users = userIds.length ? unwrap(await supabase.from('User').select('id,username').in('id', userIds)) : [];
   const usersById = new Map(users.map((user) => [user.id, user]));
 
   return suggestions.map((suggestion) => ({

@@ -70,7 +70,7 @@ DEMO_PASSWORD=choose-a-shared-demo-password
 npm run setup
 ```
 
-If `DEMO_PASSWORD` is empty, the script generates one and prints it once. Seeded accounts are `demo@hivemind.app`, `amy@hivemind.app`, `raj@hivemind.app`, and `lee@hivemind.app`.
+If `DEMO_PASSWORD` is empty, the script generates one and prints it once. Seeded accounts are `demo@hivemind.app`, `amy@hivemind.app`, `raj@hivemind.app`, and `lee@hivemind.app`. The seeded game code is `HIV-222`.
 
 ## Environment variables
 
@@ -82,7 +82,7 @@ If `DEMO_PASSWORD` is empty, the script generates one and prints it once. Seeded
 | `BASE_URL` | Production | Public application origin used in invite links. |
 | `CLIENT_URL` | Production | Allowed CORS origin and email call-to-action URL. |
 | `VITE_API_URL` | Local only | Backend URL; defaults to `http://localhost:3001` in development. |
-| `SMTP_PASS` | No | Resend API key. Email is logged as a mock when this or `SMTP_FROM` is absent. |
+| `RESEND_API_KEY` | No | Resend API key. `SMTP_PASS` remains a supported legacy alias. |
 | `SMTP_FROM` | No | Sender on a verified Resend domain. |
 | `PORT` | No | API/server port; defaults to `3001`. |
 | `CONFIRM_DEMO_RESET` | Seed only | Must equal `RESET_ALL_HIVEMIND_DATA` before seeding. |
@@ -97,7 +97,8 @@ If `DEMO_PASSWORD` is empty, the script generates one and prints it once. Seeded
 | `npm run dev:client` | Run Vite only. |
 | `npm run check` | Syntax check, lint, unit test, and production build. |
 | `npm test` | Run fast unit tests. |
-| `npm run test:e2e` | Run Playwright against a configured disposable Supabase project. |
+| `npm run test:e2e` | Run Playwright against a disposable Supabase project. Never point this at production. |
+| `npm run test:ui` | Run deterministic desktop, mobile, and 320px landing/auth smoke tests without a database. |
 | `npm run build` | Build the production frontend. |
 | `npm start` | Serve API and built frontend. |
 | `npm run setup` | Destructively reset and seed demo data after the safety latch is set. |
@@ -113,9 +114,11 @@ Playwright starts the API and Vite separately. Missing Supabase credentials ther
 - Players may revise or clear answers before expiry.
 - Matching ignores case, punctuation, repeated whitespace, and simple trailing plurals.
 - Each answer earns the number of players in its normalized answer group.
-- Tied top scores share first place and each receive a medal.
+- Tied top positive scores share first place and each receive a medal; zero-point ties do not earn medals.
 
-Email delivery is best effort. Manual sends report sent, skipped, and failed counts. Automated messages use delivery-log deduplication; a failed or unconfigured send removes its log row so a later retry remains possible.
+Email delivery is best effort. Manual sends report sent, skipped, and failed counts. Automated messages use delivery-log deduplication. When Resend is not configured, automated sends are skipped before any delivery-log writes and the admin UI shows that email is disabled.
+
+Transient email failures (network errors, timeouts, rate limits, and provider `5xx` responses) may retry. Terminal provider rejections remain deduplicated to avoid retry storms.
 
 ## Schema updates
 
@@ -143,7 +146,7 @@ Resolve any returned rows, then rerun the schema. Application-level guards remai
 
 ## Deployment
 
-[`render.yaml`](render.yaml) defines a Node 22 Render web service using deterministic `npm ci && npm run build`, `npm start`, and `/api/health`.
+[`render.yaml`](render.yaml) defines a Node 22 Render web service using deterministic `npm ci --include=dev && npm run build`, `npm start`, and `/api/health`. Vite is installed only while building; the running server does not need development dependencies.
 
 1. Create a Render Blueprint from this repository, or configure the same commands manually.
 2. Set production values for `BASE_URL`, `CLIENT_URL`, Supabase credentials, and optional Resend credentials.
@@ -157,6 +160,8 @@ Render's free tier may cold-start after inactivity. Allow a bounded startup wind
 Supabase may pause free projects with insufficient user database activity over seven days. The [Supabase keepalive workflow](.github/workflows/keepalive.yml) calls `GET /api/keepalive` daily at 13:23 UTC. Each uncached call makes three fixed, read-only database queries and returns no database data. Successful probes are cached for six hours to bound traffic to the public endpoint. `/api/health` remains a shallow process check for Render.
 
 The workflow can also run from **Actions → Supabase keepalive → Run workflow**. A `503` response means the database could not be reached; resume the project in Supabase, then run the workflow again.
+
+The endpoint and manual workflow dispatch have been verified. Confirm ongoing scheduled runs under **Actions** after 13:23 UTC. The Supabase Cron callback is the independent long-term trigger.
 
 Production also runs [`supabase/keepalive.sql`](supabase/keepalive.sql) at 01:23 UTC. This Supabase Cron job uses `pg_net` to call the same public endpoint, twelve hours away from the GitHub run. Apply this file only to the production Hivemind project because the callback targets the production Render service.
 
@@ -175,6 +180,14 @@ See [Supabase's project pausing documentation](https://supabase.com/docs/guides/
 - Dependabot opens bounded npm and GitHub Actions updates; CodeQL scans JavaScript.
 
 For a failed deploy, check `/api/health`, Render logs, required environment variables, and Supabase availability in that order.
+
+## Production checklist
+
+1. Run the latest [`supabase/schema.sql`](supabase/schema.sql) in the production Supabase SQL Editor. It is rerunnable and adds the scheduler lookup index without deleting data.
+2. In Render, set `BASE_URL` and `CLIENT_URL` to the public HTTPS origin, plus `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a long `SESSION_SECRET`.
+3. Optional: set `RESEND_API_KEY` and `SMTP_FROM` from a verified Resend domain. Without them, the game works normally but email controls remain disabled.
+4. Deploy `main`, then confirm `/api/health` reports `status: ok` and the expected Render commit in `version`; confirm `/api/keepalive` reports `database: reachable`.
+5. Verify the GitHub keepalive workflow succeeds after deployment and confirm its first scheduled run. Do not rerun `npm run setup` against production: it intentionally deletes application data.
 
 ## Backlog
 

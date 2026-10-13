@@ -1,11 +1,15 @@
 import dayjs from 'dayjs';
 import { scoreRound } from './scoring.js';
-import { sendEmail } from './email.js';
+import { isEmailConfigured, sendEmail } from './email.js';
 import { toHoursArray } from './utils.js';
 import { getRoundsForClosing, getActiveRoundsWithContext } from './repository.js';
 import { unwrap } from './db.js';
 
 export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, recipient, emailType, subject, intro, gameName }) {
+  if (!isEmailConfigured()) {
+    return false;
+  }
+
   const { error: insertError } = await supabase.from('EmailDeliveryLog').insert({
     dedupeKey,
     gameId,
@@ -34,13 +38,15 @@ export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, reci
     }
     return true;
   } catch (error) {
-    // Delete the dedupe row so a real send failure (e.g. SMTP outage) doesn't
-    // permanently block a retry. The unique constraint would silently skip
-    // it forever otherwise. One recipient's bounce also shouldn't abort the
-    // rest of the batch or the request (dashboard/publish/remind) that
-    // triggered it.
-    await supabase.from('EmailDeliveryLog').delete().eq('dedupeKey', dedupeKey);
-    console.error('[email]', dedupeKey, error);
+    // Retry transient provider/network failures; dedupe terminal rejections.
+    if (error.retryable !== false) {
+      await supabase.from('EmailDeliveryLog').delete().eq('dedupeKey', dedupeKey);
+    }
+    console.error('[email] Automated delivery failed.', {
+      dedupeKey,
+      retryable: error.retryable !== false,
+      status: error.status || null,
+    });
     return false;
   }
 }
@@ -65,6 +71,7 @@ export async function sweepExpiredSessions(supabase) {
 
 async function runProcessRounds(supabase) {
   const now = new Date();
+  const emailConfigured = isEmailConfigured();
 
   const roundsToClose = await getRoundsForClosing(supabase, now);
 
@@ -72,7 +79,7 @@ async function runProcessRounds(supabase) {
     await scoreRound(supabase, round.id);
     unwrap(await supabase.from('Round').update({ status: 'CLOSED' }).eq('id', round.id));
 
-    if (round.game.emailSettings?.autoResultsLive) {
+    if (emailConfigured && round.game.emailSettings?.autoResultsLive) {
       for (const membership of round.game.memberships) {
         const dedupeKey = `results-live:${round.id}:${membership.user.id}`;
         await sendWithDedup(supabase, {
@@ -92,7 +99,9 @@ async function runProcessRounds(supabase) {
   const activeRounds = await getActiveRoundsWithContext(supabase);
 
   for (const round of activeRounds) {
-    const hoursOptions = toHoursArray(round.game.emailSettings?.expiringHoursCsv || '');
+    const hoursOptions = emailConfigured
+      ? toHoursArray(round.game.emailSettings?.expiringHoursCsv || '')
+      : [];
     if (hoursOptions.length === 0) {
       continue;
     }

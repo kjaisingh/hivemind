@@ -4,6 +4,7 @@ export default function LeaderboardTab({ game, userId }) {
       <h2>Season Leaderboard</h2>
       <div className="table-wrap">
         <table>
+          <caption className="sr-only">Season leaderboard for {game.name}</caption>
           <thead>
             <tr>
               <th>Rank</th>
@@ -23,7 +24,11 @@ export default function LeaderboardTab({ game, userId }) {
                   <td>{row.rank}</td>
                   <td>{row.username}</td>
                   <td>{row.points}</td>
-                  <td>{'🥇'.repeat(row.medals)}</td>
+                  <td aria-label={`${row.medals} ${row.medals === 1 ? 'medal' : 'medals'}`}>
+                    {row.medals > 0 ? (
+                      <><span aria-hidden="true">🥇</span> × {row.medals}</>
+                    ) : '—'}
+                  </td>
                 </tr>
               ))
             )}

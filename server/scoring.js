@@ -1,4 +1,4 @@
-import { normalizeAnswer, safeDisplayAnswer } from './utils.js';
+import { buildScoreRows, normalizeAnswer, safeDisplayAnswer } from './utils.js';
 import { getRoundScoringData } from './repository.js';
 import { unwrap } from './db.js';
 
@@ -59,27 +59,7 @@ export async function scoreRound(supabase, roundId) {
 
   unwrap(await supabase.from('RoundScore').delete().eq('roundId', roundId));
 
-  const sorted = Array.from(totals.entries())
-    .map(([userId, totalScore]) => ({ userId, totalScore }))
-    .sort((a, b) => b.totalScore - a.totalScore);
-
-  let currentRank = 0;
-  let previousScore = null;
-
-  const rows = sorted.map((entry, index) => {
-    if (previousScore !== entry.totalScore) {
-      currentRank = index + 1;
-      previousScore = entry.totalScore;
-    }
-
-    return {
-      roundId,
-      userId: entry.userId,
-      totalScore: entry.totalScore,
-      rank: currentRank,
-      medalAwarded: currentRank === 1,
-    };
-  });
+  const rows = buildScoreRows(roundId, totals);
 
   if (rows.length > 0) {
     unwrap(await supabase.from('RoundScore').insert(rows));

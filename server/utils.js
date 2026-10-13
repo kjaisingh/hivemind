@@ -19,7 +19,9 @@ export function normalizeAnswer(answer) {
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
-    .map((word) => (word.endsWith('s') && word.length > 3 ? word.slice(0, -1) : word))
+    .map((word) =>
+      word.endsWith('s') && word.length > 3 && !/(?:ss|us|is)$/u.test(word) ? word.slice(0, -1) : word,
+    )
     .join(' ');
 }
 
@@ -46,4 +48,28 @@ export function rankByPoints(entries) {
       }
       return { ...entry, rank: currentRank };
     });
+}
+
+export function buildScoreRows(roundId, totals) {
+  const sorted = Array.from(totals.entries())
+    .map(([userId, totalScore]) => ({ userId, totalScore }))
+    .sort((a, b) => b.totalScore - a.totalScore || a.userId.localeCompare(b.userId));
+
+  let currentRank = 0;
+  let previousScore = null;
+
+  return sorted.map((entry, index) => {
+    if (previousScore !== entry.totalScore) {
+      currentRank = index + 1;
+      previousScore = entry.totalScore;
+    }
+
+    return {
+      roundId,
+      userId: entry.userId,
+      totalScore: entry.totalScore,
+      rank: currentRank,
+      medalAwarded: currentRank === 1 && entry.totalScore > 0,
+    };
+  });
 }

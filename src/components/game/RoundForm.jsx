@@ -13,21 +13,25 @@ export default function RoundForm({ roundForm, setRoundForm, editingRoundId, cre
     <div className="card stack">
       <h2>{editingRoundId ? 'Edit Draft Round' : 'Create Round'}</h2>
       <form className="stack" onSubmit={onSubmit}>
-        <input
-          aria-label="Round name"
-          placeholder="Round name"
-          maxLength={80}
-          value={roundForm.name}
-          onChange={(event) => setRoundForm((prev) => ({ ...prev, name: event.target.value }))}
-          required
-        />
-        <textarea
-          aria-label="Round description"
-          placeholder="Round description"
-          maxLength={240}
-          value={roundForm.description}
-          onChange={(event) => setRoundForm((prev) => ({ ...prev, description: event.target.value }))}
-        />
+        <label className="field stack-xs">
+          <span>Round name</span>
+          <input
+            placeholder="Round name"
+            maxLength={80}
+            value={roundForm.name}
+            onChange={(event) => setRoundForm((prev) => ({ ...prev, name: event.target.value }))}
+            required
+          />
+        </label>
+        <label className="field stack-xs">
+          <span>Round description <span className="small">(optional)</span></span>
+          <textarea
+            placeholder="Round description"
+            maxLength={240}
+            value={roundForm.description}
+            onChange={(event) => setRoundForm((prev) => ({ ...prev, description: event.target.value }))}
+          />
+        </label>
         <label className="stack">
           <span>Start date/time</span>
           <input

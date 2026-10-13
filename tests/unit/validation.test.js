@@ -3,8 +3,10 @@ import test from 'node:test';
 import {
   answersSchema,
   emailSettingsSchema,
+  joinGameSchema,
   loginSchema,
   roundSchema,
+  signUpSchema,
 } from '../../server/validation.js';
 
 const validRound = {
@@ -18,6 +20,24 @@ const validRound = {
 test('login validation handles missing bodies without throwing', () => {
   assert.equal(loginSchema.safeParse(undefined).success, false);
   assert.equal(loginSchema.safeParse({ email: 'USER@example.com', password: 'secret' }).data.email, 'user@example.com');
+});
+
+test('password validation enforces bcrypt\'s 72-byte input limit', () => {
+  const signup = (password) => signUpSchema.safeParse({
+    email: 'user@example.com',
+    username: 'user_name',
+    password,
+  });
+
+  assert.equal(signup('a'.repeat(72)).success, true);
+  assert.equal(signup('a'.repeat(73)).success, false);
+  assert.equal(signup('é'.repeat(36)).success, true);
+  assert.equal(signup('é'.repeat(37)).success, false);
+  assert.equal(loginSchema.safeParse({ email: 'user@example.com', password: 'é'.repeat(37) }).success, false);
+});
+
+test('seed game code matches the public join-code contract', () => {
+  assert.equal(joinGameSchema.safeParse({ code: 'HIV-222' }).success, true);
 });
 
 test('round validation enforces date order and unique choices', () => {

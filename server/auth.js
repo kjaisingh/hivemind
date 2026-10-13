@@ -32,7 +32,9 @@ export function configurePassport(supabase) {
       },
       async (email, password, done) => {
         try {
-          const user = unwrap(await supabase.from('User').select('*').eq('email', email).maybeSingle());
+          const user = unwrap(
+            await supabase.from('User').select('id,email,username,passwordHash').eq('email', email).maybeSingle(),
+          );
           if (!user?.passwordHash) {
             return done(null, false, { message: 'Invalid credentials.' });
           }
@@ -56,7 +58,7 @@ export function configurePassport(supabase) {
 
   passport.deserializeUser(async (id, done) => {
     try {
-      const user = unwrap(await supabase.from('User').select('*').eq('id', id).maybeSingle());
+      const user = unwrap(await supabase.from('User').select('id,email,username').eq('id', id).maybeSingle());
       done(null, user);
     } catch (error) {
       done(error);

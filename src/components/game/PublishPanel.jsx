@@ -42,21 +42,26 @@ export default function PublishPanel({
         </div>
       )}
       <form className="stack" onSubmit={onPublish}>
-        <select aria-label="Draft round to publish" value={draftToPublish} onChange={(event) => setDraftToPublish(event.target.value)}>
-          <option value="">Select draft round</option>
-          {draftRounds.map((round) => (
-            <option key={round.id} value={round.id}>
-              {round.name}
-            </option>
-          ))}
-        </select>
-        <textarea
-          aria-label="Release announcement"
-          placeholder="Release announcement email"
-          value={announcement}
-          onChange={(event) => setAnnouncement(event.target.value)}
-          maxLength={5000}
-        />
+        <label className="field stack-xs">
+          <span>Draft round</span>
+          <select value={draftToPublish} onChange={(event) => setDraftToPublish(event.target.value)}>
+            <option value="">Select draft round</option>
+            {draftRounds.map((round) => (
+              <option key={round.id} value={round.id}>
+                {round.name} · starts {new Date(round.startsAt).toLocaleString()}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field stack-xs">
+          <span>Announcement <span className="small">(optional)</span></span>
+          <textarea
+            placeholder="Message included with the round-open email"
+            value={announcement}
+            onChange={(event) => setAnnouncement(event.target.value)}
+            maxLength={5000}
+          />
+        </label>
         <button className="button" type="submit" disabled={publishing || !draftToPublish}>
           {publishing ? 'Publishing...' : 'Publish'}
         </button>

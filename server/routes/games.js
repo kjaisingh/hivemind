@@ -7,6 +7,7 @@ import { createGameCode, createInviteToken, rankByPoints } from '../utils.js';
 import { buildGameInvite, ensureMembership, getRole } from '../helpers.js';
 import { joinLimiter } from '../limiters.js';
 import { gameSchema, joinGameSchema, validationMessage } from '../validation.js';
+import { isEmailConfigured } from '../email.js';
 
 const router = Router();
 
@@ -156,6 +157,7 @@ router.get('/games/:gameId', requireAuth, async (req, res) => {
       code: game.code,
       inviteUrl: buildGameInvite(req, game),
       role,
+      emailConfigured: isEmailConfigured(),
       activeRound: activeRound
         ? {
             id: activeRound.id,
