@@ -347,17 +347,18 @@ export default function GamePage() {
   async function sendManualEmail(event) {
     event.preventDefault();
     setError('');
+    setStatus('');
     setSendingEmail(true);
     try {
       const result = await api(`/api/games/${gameId}/email/manual`, { method: 'POST', body: JSON.stringify(manualEmail) });
-      setStatus(
-        result.skippedCount > 0
-          ? `Email delivery is not configured. ${result.skippedCount} email${result.skippedCount === 1 ? '' : 's'} skipped.`
-          : result.failedCount > 0
-          ? `Sent ${result.sentCount} of ${result.totalCount} emails. ${result.failedCount} failed.`
-          : `Sent ${result.sentCount} email${result.sentCount === 1 ? '' : 's'}.`,
-      );
-      setManualEmail({ subject: '', message: '' });
+      if (result.skippedCount > 0) {
+        setError(`Email delivery is not configured. ${result.skippedCount} email${result.skippedCount === 1 ? '' : 's'} skipped.`);
+      } else if (result.failedCount > 0) {
+        setError(`Sent ${result.sentCount} of ${result.totalCount} emails. ${result.failedCount} failed.`);
+      } else {
+        setStatus(`Sent ${result.sentCount} email${result.sentCount === 1 ? '' : 's'}.`);
+        setManualEmail({ subject: '', message: '' });
+      }
     } catch (err) {
       setError(err.message || 'Failed to send email');
     } finally {
@@ -367,19 +368,20 @@ export default function GamePage() {
 
   async function sendReminder() {
     setError('');
+    setStatus('');
     setRemindingPlayers(true);
     try {
       const roundId = game.activeRound.id;
       const { remindedCount, pendingCount } = await api(`/api/games/${gameId}/rounds/${roundId}/remind`, { method: 'POST' });
-      setStatus(
-        pendingCount === 0
-          ? 'Everyone has already submitted. No reminders needed.'
-          : remindedCount === pendingCount
-            ? `Reminded ${remindedCount} player(s) with unanswered questions.`
-            : remindedCount === 0
-              ? `${pendingCount} player(s) are pending, but no reminder emails were sent. Check email configuration.`
-              : `Reminded ${remindedCount} of ${pendingCount} pending player(s).`,
-      );
+      if (pendingCount === 0) {
+        setStatus('Everyone has already submitted. No reminders needed.');
+      } else if (remindedCount === pendingCount) {
+        setStatus(`Reminded ${remindedCount} player(s) with unanswered questions.`);
+      } else if (remindedCount === 0) {
+        setError(`${pendingCount} player(s) are pending, but no reminder emails were sent. Check email configuration.`);
+      } else {
+        setError(`Reminded ${remindedCount} of ${pendingCount} pending player(s).`);
+      }
     } catch (err) {
       setError(err.message || 'Failed to send reminder');
     } finally {
@@ -581,8 +583,8 @@ export default function GamePage() {
         />
       )}
 
-      {status && <p className="success">{status}</p>}
-      {error && <p className="error">{error}</p>}
+      {status && <p className="success" role="status">{status}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
     </main>
   );
 }
