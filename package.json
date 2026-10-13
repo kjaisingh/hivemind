@@ -21,7 +21,12 @@
     "db:seed": "node supabase/seed.js",
     "setup": "npm run db:seed"
   },
-  "keywords": ["multiplayer", "party-game", "react", "express"],
+  "keywords": [
+    "multiplayer",
+    "party-game",
+    "react",
+    "express"
+  ],
   "author": "kjaisingh",
   "license": "MIT",
   "dependencies": {
@@ -29,7 +34,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dayjs": "^1.11.23",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.7",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
     "express-session": "^1.19.0",
@@ -53,7 +58,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.7",
-    "globals": "^16.5.0",
+    "globals": "^17.13.0",
     "vite": "^8.3.4"
   },
   "engines": {
