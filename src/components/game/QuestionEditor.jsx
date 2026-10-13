@@ -29,6 +29,7 @@ export default function QuestionEditor({ question, index, questions, setQuestion
         <input
           aria-label={`Question ${index + 1}`}
           placeholder={`Question ${index + 1}`}
+          maxLength={240}
           value={question.prompt}
           onChange={(event) => updateQuestion({ prompt: event.target.value })}
           required
@@ -59,6 +60,7 @@ export default function QuestionEditor({ question, index, questions, setQuestion
               <input
                 aria-label={`Question ${index + 1} choice ${choiceIndex + 1}`}
                 placeholder={`Choice ${choiceIndex + 1}`}
+                maxLength={120}
                 value={choice}
                 onChange={(event) => updateChoice(choiceIndex, event.target.value)}
                 required

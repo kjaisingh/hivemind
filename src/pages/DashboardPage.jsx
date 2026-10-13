@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 import { getUrgencyTier, formatTimeRemaining, urgencyPillClass } from '../lib/countdown';
 
 export default function DashboardPage() {
@@ -13,15 +13,19 @@ export default function DashboardPage() {
   const [creatingGame, setCreatingGame] = useState(false);
   const [joiningGame, setJoiningGame] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
 
   async function loadDashboard() {
+    setError('');
     const data = await api('/api/dashboard');
     setGames(data.games);
   }
 
   useEffect(() => {
-    loadDashboard().catch((loadError) => setError(loadError.message));
+    loadDashboard()
+      .catch((loadError) => setError(loadError.message))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -31,7 +35,10 @@ export default function DashboardPage() {
 
   const pendingAlerts = useMemo(() => games.filter((game) => game.hasPendingSubmission), [games]);
   const recentActivity = useMemo(
-    () => games.flatMap((game) => game.recentClosedRounds.map((round) => ({ ...round, gameName: game.name, gameId: game.id }))).slice(0, 8),
+    () => games
+      .flatMap((game) => game.recentClosedRounds.map((round) => ({ ...round, gameName: game.name, gameId: game.id })))
+      .sort((a, b) => new Date(b.expiresAt) - new Date(a.expiresAt))
+      .slice(0, 8),
     [games],
   );
 
@@ -80,11 +87,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="page stack-lg">
+    <main className="page stack-lg">
       <header className="row-between">
         <div>
           <h1>Welcome, {user?.username}</h1>
-          <p>Your hive is buzzing across {games.length} game(s).</p>
+          <p>{loading ? 'Loading your hive...' : `Your hive is buzzing across ${games.length} game(s).`}</p>
         </div>
         <div className="row">
           <button className="button button-secondary" onClick={logout} type="button">Logout</button>
@@ -96,16 +103,22 @@ export default function DashboardPage() {
           <h2>Create Game</h2>
           <form className="stack" onSubmit={createGame}>
             <input
+              aria-label="Game name"
               placeholder="Game name"
               value={createForm.name}
               onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
               required
+              minLength={2}
+              maxLength={80}
             />
             <textarea
+              aria-label="Game description"
               placeholder="Game description"
               value={createForm.description}
               onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))}
               required
+              minLength={2}
+              maxLength={240}
             />
             <button className="button" type="submit" disabled={creatingGame}>
               {creatingGame ? 'Creating...' : 'Create Game'}
@@ -117,10 +130,13 @@ export default function DashboardPage() {
           <h2>Join Game</h2>
           <form className="stack" onSubmit={joinGame}>
             <input
+              aria-label="Game code"
               placeholder="Enter game code (ABC-123)"
               value={joinCode}
               onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
               required
+              maxLength={7}
+              pattern="[A-Z2-9]{3}-[A-Z2-9]{3}"
             />
             <button className="button" type="submit" disabled={joiningGame}>
               {joiningGame ? 'Joining...' : 'Join'}
@@ -132,7 +148,7 @@ export default function DashboardPage() {
 
       <section className="card">
         <h2>Actionable Alerts</h2>
-        {pendingAlerts.length === 0 ? <p>No unanswered active rounds right now.</p> : (
+        {loading ? <p>Loading alerts...</p> : pendingAlerts.length === 0 ? <p>No unanswered active rounds right now.</p> : (
           <ul className="stack">
             {pendingAlerts.map((game) => (
               <li key={game.id} className="list-item">
@@ -146,7 +162,7 @@ export default function DashboardPage() {
 
       <section className="card">
         <h2>Active Games</h2>
-        {games.length === 0 ? <p>No games yet. Create one or join with a code.</p> : (
+        {loading ? <p>Loading games...</p> : games.length === 0 ? <p>No games yet. Create one or join with a code.</p> : (
         <div className="stack">
           {games.map((game) => (
             <button key={game.id} type="button" className="game-card" onClick={() => navigate(`/games/${game.id}`)}>
@@ -168,7 +184,7 @@ export default function DashboardPage() {
 
       <section className="card">
         <h2>Recent Activity</h2>
-        {recentActivity.length === 0 ? <p>No rounds have closed yet.</p> : (
+        {loading ? <p>Loading activity...</p> : recentActivity.length === 0 ? <p>No rounds have closed yet.</p> : (
           <ul className="stack">
             {recentActivity.map((item) => (
               <li key={item.id} className="list-item">
@@ -180,7 +196,14 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {error && <p className="error" role="alert">{error}</p>}
-    </div>
+      {error && (
+        <div className="error row-between" role="alert">
+          <span>{error}</span>
+          <button className="link" type="button" onClick={() => loadDashboard().catch((loadError) => setError(loadError.message))}>
+            Retry
+          </button>
+        </div>
+      )}
+    </main>
   );
 }

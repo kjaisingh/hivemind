@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 import { GAME_TABS, GAME_TAB_LABELS } from '../lib/gameTabs';
 import ActiveRoundTab from '../components/game/ActiveRoundTab';
 import LeaderboardTab from '../components/game/LeaderboardTab';
@@ -53,8 +53,12 @@ export default function GamePage() {
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const [dismissingSuggestionId, setDismissingSuggestionId] = useState(null);
   const [promotingSuggestionId, setPromotingSuggestionId] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [answersDirty, setAnswersDirty] = useState(false);
 
   const loadGameRequestRef = useRef(0);
+  const answersDirtyRef = useRef(false);
+  const loadedRoundIdRef = useRef(null);
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
 
   const loadGame = useCallback(async () => {
@@ -64,16 +68,22 @@ export default function GamePage() {
       if (requestId !== loadGameRequestRef.current) return;
 
       setGame(data.game);
-      setAnswers(
-        data.game.activeRound
-          ? Object.fromEntries(data.game.activeRound.answers.map((item) => [item.questionId, item.rawAnswer]))
-          : {},
-      );
+      const incomingRoundId = data.game.activeRound?.id || null;
+      if (!answersDirtyRef.current || loadedRoundIdRef.current !== incomingRoundId) {
+        setAnswers(
+          data.game.activeRound
+            ? Object.fromEntries(data.game.activeRound.answers.map((item) => [item.questionId, item.rawAnswer]))
+            : {},
+        );
+        answersDirtyRef.current = false;
+        setAnswersDirty(false);
+      }
+      loadedRoundIdRef.current = incomingRoundId;
 
       const draftRounds = data.game.draftRounds || [];
-      if (draftRounds.length > 0 && !draftToPublish) {
-        setDraftToPublish(draftRounds[0].id);
-      }
+      setDraftToPublish((current) =>
+        draftRounds.some((round) => round.id === current) ? current : (draftRounds[0]?.id || ''),
+      );
 
       if (data.game.emailSettings) {
         setEmailSettings({
@@ -88,16 +98,36 @@ export default function GamePage() {
 
       if (data.game.role === 'ADMIN') {
         const suggestionsData = await api(`/api/games/${gameId}/suggestions`);
+        if (requestId !== loadGameRequestRef.current) return;
         setSuggestions(suggestionsData.suggestions || []);
+      } else {
+        setSuggestions([]);
       }
     } catch (err) {
+      if (requestId !== loadGameRequestRef.current) return;
       setError(err.message || 'Failed to load game');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
   useEffect(() => {
-    loadGame();
+    loadGameRequestRef.current += 1;
+    setGame(null);
+    setActiveTab('active');
+    setAnswers({});
+    answersDirtyRef.current = false;
+    loadedRoundIdRef.current = null;
+    setAnswersDirty(false);
+    setStatus('');
+    setError('');
+    setRoundForm(defaultRoundForm());
+    setEditingRoundId(null);
+    setDraftToPublish('');
+    setSuggestions([]);
+    setProgress(null);
+  }, [gameId]);
+
+  useEffect(() => {
+    void loadGame();
   }, [loadGame]);
 
   useEffect(() => {
@@ -105,14 +135,49 @@ export default function GamePage() {
   }, [game?.activeRound?.id]);
 
   useEffect(() => {
+    if (roundExpired) void loadGame();
+  }, [loadGame, roundExpired]);
+
+  useEffect(() => {
     if (!game?.inviteUrl) {
       setQrDataUrl(null);
       return;
     }
+    let active = true;
     QRCode.toDataURL(game.inviteUrl, { margin: 1, width: 200 })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+      .then((dataUrl) => {
+        if (active) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (active) setQrDataUrl(null);
+      });
+    return () => {
+      active = false;
+    };
   }, [game?.inviteUrl]);
+
+  useEffect(() => {
+    const roundId = game?.activeRound?.id;
+    if (!roundId) {
+      setProgress(null);
+      return undefined;
+    }
+    let active = true;
+    const loadProgress = async () => {
+      try {
+        const data = await api(`/api/games/${gameId}/rounds/${roundId}/progress`);
+        if (active) setProgress(data);
+      } catch {
+        if (active) setProgress(null);
+      }
+    };
+    void loadProgress();
+    const timer = setInterval(loadProgress, 15_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [gameId, game?.activeRound?.id]);
 
   const visibleTabs = useMemo(
     () => GAME_TABS.filter((tab) => tab !== 'manage' || game?.role === 'ADMIN'),
@@ -122,6 +187,27 @@ export default function GamePage() {
   function resetRoundForm() {
     setEditingRoundId(null);
     setRoundForm(defaultRoundForm());
+  }
+
+  function updateAnswers(updater) {
+    setAnswers(updater);
+    answersDirtyRef.current = true;
+    setAnswersDirty(true);
+    setStatus('');
+  }
+
+  function handleTabKeyDown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = visibleTabs.indexOf(activeTab);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? visibleTabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + visibleTabs.length) % visibleTabs.length;
+    const nextTab = visibleTabs[nextIndex];
+    setActiveTab(nextTab);
+    event.currentTarget.parentElement.querySelector(`#tab-${nextTab}`)?.focus();
   }
 
   function startEditRound(round) {
@@ -146,6 +232,8 @@ export default function GamePage() {
       const payload = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
       await api(`/api/games/${gameId}/active-round/save`, { method: 'POST', body: JSON.stringify({ answers: payload }) });
       setStatus('Answers saved.');
+      answersDirtyRef.current = false;
+      setAnswersDirty(false);
     } catch (err) {
       setError(err.message || 'Failed to save answers');
     } finally {
@@ -185,6 +273,14 @@ export default function GamePage() {
 
     if (questions.some((question) => question.type === 'MULTIPLE_CHOICE' && question.choices.length < 2)) {
       setError('Multiple choice questions need at least two choices.');
+      return;
+    }
+    if (questions.some((question) => {
+      if (question.type !== 'MULTIPLE_CHOICE') return false;
+      const normalized = question.choices.map((choice) => choice.toLocaleLowerCase());
+      return new Set(normalized).size !== normalized.length;
+    })) {
+      setError('Multiple choice options must be unique.');
       return;
     }
 
@@ -253,8 +349,14 @@ export default function GamePage() {
     setError('');
     setSendingEmail(true);
     try {
-      await api(`/api/games/${gameId}/email`, { method: 'POST', body: JSON.stringify(manualEmail) });
-      setStatus('Email sent.');
+      const result = await api(`/api/games/${gameId}/email/manual`, { method: 'POST', body: JSON.stringify(manualEmail) });
+      setStatus(
+        result.skippedCount > 0
+          ? `Email delivery is not configured. ${result.skippedCount} email${result.skippedCount === 1 ? '' : 's'} skipped.`
+          : result.failedCount > 0
+          ? `Sent ${result.sentCount} of ${result.totalCount} emails. ${result.failedCount} failed.`
+          : `Sent ${result.sentCount} email${result.sentCount === 1 ? '' : 's'}.`,
+      );
       setManualEmail({ subject: '', message: '' });
     } catch (err) {
       setError(err.message || 'Failed to send email');
@@ -268,11 +370,15 @@ export default function GamePage() {
     setRemindingPlayers(true);
     try {
       const roundId = game.activeRound.id;
-      const { remindedCount } = await api(`/api/games/${gameId}/rounds/${roundId}/remind`, { method: 'POST' });
+      const { remindedCount, pendingCount } = await api(`/api/games/${gameId}/rounds/${roundId}/remind`, { method: 'POST' });
       setStatus(
-        remindedCount > 0
-          ? `Reminded ${remindedCount} player(s) with unanswered questions.`
-          : 'Everyone has already submitted. No reminders needed.',
+        pendingCount === 0
+          ? 'Everyone has already submitted. No reminders needed.'
+          : remindedCount === pendingCount
+            ? `Reminded ${remindedCount} player(s) with unanswered questions.`
+            : remindedCount === 0
+              ? `${pendingCount} player(s) are pending, but no reminder emails were sent. Check email configuration.`
+              : `Reminded ${remindedCount} of ${pendingCount} pending player(s).`,
       );
     } catch (err) {
       setError(err.message || 'Failed to send reminder');
@@ -286,10 +392,12 @@ export default function GamePage() {
     setError('');
     setSubmittingSuggestion(true);
     try {
-      await api(`/api/games/${gameId}/suggestions`, { method: 'POST', body: JSON.stringify({ prompt: suggestionPrompt }) });
+      const data = await api(`/api/games/${gameId}/suggestions`, { method: 'POST', body: JSON.stringify({ prompt: suggestionPrompt }) });
       setStatus('Suggestion submitted. Thanks!');
       setSuggestionPrompt('');
-      await loadGame();
+      if (game.role === 'ADMIN') {
+        setSuggestions((current) => [{ ...data.suggestion, submittedBy: user }, ...current]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to submit suggestion');
     } finally {
@@ -370,7 +478,7 @@ export default function GamePage() {
   }
 
   return (
-    <div className="page stack-lg">
+    <main className="page stack-lg">
       <div className="row-between">
         <div>
           <h1>{game.name}</h1>
@@ -390,8 +498,10 @@ export default function GamePage() {
             role="tab"
             aria-selected={activeTab === tab}
             aria-controls={`panel-${tab}`}
+            tabIndex={activeTab === tab ? 0 : -1}
             className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
             onClick={() => setActiveTab(tab)}
+            onKeyDown={handleTabKeyDown}
             type="button"
           >
             {GAME_TAB_LABELS[tab]}
@@ -403,7 +513,9 @@ export default function GamePage() {
         <ActiveRoundTab
           game={game}
           answers={answers}
-          setAnswers={setAnswers}
+          setAnswers={updateAnswers}
+          answersDirty={answersDirty}
+          progress={progress}
           roundExpired={roundExpired}
           onExpire={handleRoundExpire}
           savingAnswers={savingAnswers}
@@ -471,6 +583,6 @@ export default function GamePage() {
 
       {status && <p className="success">{status}</p>}
       {error && <p className="error">{error}</p>}
-    </div>
+    </main>
   );
 }

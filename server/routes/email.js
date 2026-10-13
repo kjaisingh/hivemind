@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware.js';
 import { sendEmail } from '../email.js';
 import { getRole } from '../helpers.js';
 import { emailLimiter } from '../limiters.js';
+import { emailSettingsSchema, manualEmailSchema, validationMessage } from '../validation.js';
 
 const router = Router();
 
@@ -13,9 +14,10 @@ router.put('/games/:gameId/email-settings', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Admin only.' });
   }
 
-  const expiringHours = Array.isArray(req.body.expiringHours)
-    ? req.body.expiringHours.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
-    : [];
+  const parsed = emailSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: validationMessage(parsed) });
+  }
 
   const settings = unwrap(
     await supabase
@@ -23,9 +25,9 @@ router.put('/games/:gameId/email-settings', requireAuth, async (req, res) => {
       .upsert(
         {
           gameId: req.params.gameId,
-          autoRoundOpen: Boolean(req.body.autoRoundOpen),
-          autoResultsLive: Boolean(req.body.autoResultsLive),
-          expiringHoursCsv: expiringHours.join(','),
+          autoRoundOpen: parsed.data.autoRoundOpen,
+          autoResultsLive: parsed.data.autoResultsLive,
+          expiringHoursCsv: parsed.data.expiringHours.join(','),
         },
         { onConflict: 'gameId' },
       )
@@ -42,37 +44,39 @@ router.post('/games/:gameId/email/manual', requireAuth, emailLimiter, async (req
     return res.status(403).json({ message: 'Admin only.' });
   }
 
-  const subject = String(req.body.subject || '').trim();
-  const message = String(req.body.message || '').trim();
-
-  if (!subject || !message) {
-    return res.status(400).json({ message: 'Subject and message are required.' });
-  }
-  if (subject.length > 200 || message.length > 5000) {
-    return res.status(400).json({ message: 'Subject or message is too long.' });
+  const parsed = manualEmailSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: validationMessage(parsed) });
   }
 
   const game = unwrap(await supabase.from('Game').select('*').eq('id', req.params.gameId).maybeSingle());
+  if (!game) {
+    return res.status(404).json({ message: 'Game not found.' });
+  }
   const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', req.params.gameId));
   const userIds = memberships.map((membership) => membership.userId);
   const users = userIds.length ? unwrap(await supabase.from('User').select('*').in('id', userIds)) : [];
 
   let sentCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
   for (const user of users) {
     try {
-      await sendEmail({
+      const sent = await sendEmail({
         to: user.email,
-        subject,
-        intro: message,
+        subject: parsed.data.subject,
+        intro: parsed.data.message,
         gameName: game.name,
       });
-      sentCount += 1;
+      if (sent) sentCount += 1;
+      else skippedCount += 1;
     } catch (error) {
+      failedCount += 1;
       console.error('[email]', 'manual', user.email, error);
     }
   }
 
-  res.json({ ok: true, sentCount, totalCount: users.length });
+  res.json({ ok: sentCount === users.length, sentCount, skippedCount, failedCount, totalCount: users.length });
 });
 
 export default router;

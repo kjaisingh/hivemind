@@ -21,19 +21,19 @@ function buildEmail(subject, intro, gameName, ctaLink) {
       <h2>${escapeHtml(subject)}</h2>
       <p>${escapeHtml(intro)}</p>
       <p>You are receiving this because you are part of <strong>${escapeHtml(gameName)}</strong>.</p>
-      <p><a href="${ctaLink}" style="display:inline-block;padding:10px 16px;background:#1f7aec;color:white;border-radius:8px;text-decoration:none;">Open Hivemind</a></p>
+      <p><a href="${escapeHtml(ctaLink)}" style="display:inline-block;padding:10px 16px;background:#1f7aec;color:white;border-radius:8px;text-decoration:none;">Open Hivemind</a></p>
       <p style="font-size:12px;color:#666;">Hivemind: where your best answer is the answer everyone else guessed too.</p>
     </div>
   `;
 }
 
 export async function sendEmail({ to, subject, intro, gameName }) {
-  const appUrl = process.env.CLIENT_URL;
+  const appUrl = process.env.CLIENT_URL || process.env.BASE_URL || 'http://localhost:5173';
   const html = buildEmail(subject, intro, gameName, appUrl);
 
   if (!hasResend) {
     console.log('[email:mock]', { to, subject, intro });
-    return;
+    return false;
   }
 
   const controller = new AbortController();
@@ -68,4 +68,5 @@ export async function sendEmail({ to, subject, intro, gameName }) {
     const body = await response.json().catch(() => ({}));
     throw new Error(`Message failed: ${response.status} ${body.message || response.statusText}`);
   }
+  return true;
 }

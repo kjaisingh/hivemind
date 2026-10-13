@@ -16,6 +16,7 @@ export default function RoundForm({ roundForm, setRoundForm, editingRoundId, cre
         <input
           aria-label="Round name"
           placeholder="Round name"
+          maxLength={80}
           value={roundForm.name}
           onChange={(event) => setRoundForm((prev) => ({ ...prev, name: event.target.value }))}
           required
@@ -23,6 +24,7 @@ export default function RoundForm({ roundForm, setRoundForm, editingRoundId, cre
         <textarea
           aria-label="Round description"
           placeholder="Round description"
+          maxLength={240}
           value={roundForm.description}
           onChange={(event) => setRoundForm((prev) => ({ ...prev, description: event.target.value }))}
         />
@@ -58,7 +60,7 @@ export default function RoundForm({ roundForm, setRoundForm, editingRoundId, cre
           ))}
         </div>
 
-        <button type="button" className="button button-secondary" onClick={addQuestion}>
+        <button type="button" className="button button-secondary" onClick={addQuestion} disabled={roundForm.questions.length >= 20}>
           Add Question
         </button>
         <div className="row">

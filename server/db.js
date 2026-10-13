@@ -16,7 +16,15 @@ export const supabase = createClient(supabaseUrl, serviceRoleKey, {
 
 export function unwrap({ data, error }) {
   if (error) {
-    throw new Error(error.message);
+    const databaseError = new Error(error.message);
+    databaseError.code = error.code;
+    databaseError.details = error.details;
+    databaseError.hint = error.hint;
+    throw databaseError;
   }
   return data;
+}
+
+export function isUniqueViolation(error) {
+  return error?.code === '23505';
 }

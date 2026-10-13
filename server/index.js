@@ -6,7 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { supabase } from './db.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
-import { startRoundScheduler, processRounds } from './roundScheduler.js';
+import { startRoundScheduler } from './roundScheduler.js';
 import authRoutes from './routes/auth.js';
 import gamesRoutes from './routes/games.js';
 import roundsRoutes from './routes/rounds.js';
@@ -67,8 +67,7 @@ app.use((error, _req, res, _next) => {
   res.status(error.status || 500).json({ message: 'Something went wrong. Please try again.' });
 });
 
-app.listen(port, async () => {
-  await processRounds(supabase);
+app.listen(port, () => {
   startRoundScheduler(supabase);
   console.log(`Hivemind running on http://localhost:${port}`);
 });

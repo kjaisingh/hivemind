@@ -1,108 +1,176 @@
 # Hivemind
+
 [![CI](https://github.com/kjaisingh/hivemind/actions/workflows/ci.yml/badge.svg)](https://github.com/kjaisingh/hivemind/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/kjaisingh/hivemind/actions/workflows/codeql.yml/badge.svg)](https://github.com/kjaisingh/hivemind/actions/workflows/codeql.yml)
 
-Hivemind is a multiplayer guessing game where the best answer is the one your group also submits.
+Hivemind is a private multiplayer guessing game. Players answer independently, then earn points for matching the group. Admins create rounds, mix free-text and multiple-choice questions, share invite links or codes, send reminders, and track season standings.
 
-## Overview
-- **Create and Invite**: One person acts as the game admin, setting up a new game and sharing a custom invite link, join code, or QR code. Friends, family, or coworkers simply use any of the three, create an account, and are instantly dropped into the private group.
-- **Draft, Then Publish**: Admins build a round's questions as a draft, free to edit or delete it, before publishing it to the group. Players can also suggest questions of their own for the admin to review and promote into a draft round, or dismiss.
-- **Answer the Call**: Whenever the admin publishes a round, players log in to face a series of open-ended questions. You can take your time and edit your submissions right up until the round's expiration timer hits zero, a live countdown shows exactly how much time is left, both on the round itself and on the dashboard's active-games list.
-- **Think Like the Hive**: Here is the catch, there are no strictly "correct" answers in the traditional sense! Your goal is to submit the exact same answer as the majority of your group. You have to put yourself in your friends' shoes and guess what the most common response will be.
-- **Reveal and Score**: Once the deadline passes, the round locks and the results are published. The game automatically groups everyone's answers together (matching is case- and whitespace-insensitive) and shows a detailed breakdown, with a 🥇 medal for whoever came out on top. Your score for a question is exactly equal to the number of people who guessed the same thing, for example, if you answer "Hydrogen" and 123 other people did too, you bag 124 points!
-- **Climb the Ranks**: Every round's points are tallied up into a massive Leaderboard, with medal counts and your own row highlighted. Check your weekly stats, see where your mind diverged from the pack, and accumulate the highest total score across all the active rounds to climb the Season Standings and be crowned the ultimate Hivemind champion!
-- **Nudge Stragglers**: Admins can send a one-click reminder email to anyone who hasn't submitted answers for the active round yet, send a custom one-off email to the whole group, or opt a game into automatic emails for round-open, results-live, and expiring-soon (at configurable hour thresholds) instead.
-- **Light or Dark**: A theme toggle (bottom-left) switches between light and dark mode, remembers your choice per browser, and defaults to your OS preference on first visit.
+## How it works
 
-## Feature Backlog
-- Player up/down-voting on suggested questions, instead of the admin being sole reviewer.
-- Configurable scoring (e.g. a bonus for landing on the single most-common answer, not just a flat count).
-- Recurring/scheduled round publishing on a cadence, instead of manual publish only.
-- Exportable season results (CSV) for archiving past seasons.
-- Web push notifications (VAPID), as an alternative to email for round-open, results-live, and reminder alerts.
-- Co-admins per game, so round management and reminders aren't bottlenecked on a single admin.
-- Live "N of M submitted" progress on the active round (without revealing anyone's actual answer), so the group can watch a round fill up in real time.
-- Bulk player invite by pasting a list of emails, instead of only a shareable link, code, or QR.
+1. An admin creates a game and shares its invite link, QR code, or short code.
+2. Players join with an account and answer the active round until its deadline.
+3. The server normalizes answers, groups matches, calculates scores, and publishes results after the round closes.
+4. Round points and first-place medals roll into the game leaderboard.
 
-## Tech Stack
-- **Frontend**: React + Vite
-- **Backend**: Node.js + Express
-- **Database**: Supabase (PostgreSQL via `@supabase/supabase-js`)
-- **Auth**: Passport (Local)
-- **Email**: [Resend](https://resend.com) HTTPS API (`SMTP_PASS` holds the Resend API key)
-- **Charts**: Recharts (lazy-loaded on the results route)
-- **Deployment**: Render (single web service)
+Active rounds show only an anonymous `N of M submitted` count. They never reveal who submitted or any answer before results open.
 
-## Local Development
+## Stack
 
-1. Create a free project at [supabase.com](https://supabase.com), then in the SQL Editor run [`supabase/schema.sql`](supabase/schema.sql).
-2. Copy `.env.example` to `.env` and fill in `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` from Project Settings → API. `SUPABASE_URL` is the Supabase **project** URL, not the `/rest/v1/` REST endpoint.
-3. Install dependencies and seed demo data.
+- React 19 and Vite 8
+- Node.js 22 and Express 5
+- Supabase Postgres, accessed server-side with a service-role key
+- Passport local authentication with server-side Supabase sessions
+- Resend HTTPS API for optional email notifications
+- Recharts for lazy-loaded results charts
+- Playwright for end-to-end tests and Node's test runner for unit tests
+- Render for the production web service
+
+## Local setup
+
+Requirements: Node.js 22+, npm, and a disposable Supabase project.
+
+1. Clone and install dependencies.
+
    ```bash
-   npm install
-   npm run setup
+   git clone https://github.com/kjaisingh/hivemind.git
+   cd hivemind
+   npm ci
    ```
-4. Start the app.
+
+2. Create a Supabase project. In its SQL Editor, run [`supabase/schema.sql`](supabase/schema.sql).
+
+3. Copy `.env.example` to `.env` and set at least:
+
+   ```dotenv
+   SUPABASE_URL=https://your-project-ref.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   SESSION_SECRET=a-long-random-value
+   ```
+
+4. Start both applications.
+
    ```bash
    npm run dev
    ```
-5. Open the app.
-   - Frontend: `http://localhost:5183`
-   - Backend API: `http://localhost:3001`
 
-### Demo Accounts
-All demo users share one password, set via `DEMO_PASSWORD` in `.env` (if unset, `npm run setup` generates one and prints it once, save it):
-- `demo@hivemind.app` (admin of demo game)
-- `amy@hivemind.app`
-- `raj@hivemind.app`
-- `lee@hivemind.app`
+5. Open `http://localhost:5183`. The API runs on `http://localhost:3001`.
 
-Seeded game includes:
-- 1 active round ready to answer.
-- 1 past round with real computed results and leaderboard data.
+### Optional demo data
 
-## Scripts
-- `npm run setup` → seed demo data (run `supabase/schema.sql` in Supabase first).
-- `npm run dev` → run server and client together (`dev:server` + `dev:client`).
-- `npm run dev:server` → server only, with `nodemon` reload.
-- `npm run dev:client` → Vite dev server only.
-- `npm test` → run the Playwright end-to-end suite (starts its own dev server; see `playwright.config.js`).
-- `npm run build` → production frontend build.
-- `npm start` → run production server.
-- `npm run preview` → preview the production frontend build locally.
+> **Destructive:** the seed command deletes every session, game, membership, round, submission, score, and user reachable through cascading deletes. Never point it at a database containing data you need.
 
-## Testing & CI
-- `npm test` runs the full Playwright suite against a real browser: auth (signup/login/logout/session
-  persistence), a two-browser-context multiplayer round (draft → publish → submit → score →
-  leaderboard), reminders, results, and IDOR/security regressions.
-- Every push and PR to `main` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on GitHub
-  Actions: install, syntax-check all `server/*.js` files, build the client, and a non-blocking
-  `npm audit`.
+Only seed a disposable local/test project. The explicit latch prevents accidental resets:
+
+```dotenv
+CONFIRM_DEMO_RESET=RESET_ALL_HIVEMIND_DATA
+DEMO_PASSWORD=choose-a-shared-demo-password
+```
+
+```bash
+npm run setup
+```
+
+If `DEMO_PASSWORD` is empty, the script generates one and prints it once. Seeded accounts are `demo@hivemind.app`, `amy@hivemind.app`, `raj@hivemind.app`, and `lee@hivemind.app`.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | Yes | Supabase project URL, not the `/rest/v1` endpoint. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only key. Never expose it to Vite or browser code. |
+| `SESSION_SECRET` | Yes | Long random value used to sign session cookies. |
+| `BASE_URL` | Production | Public application origin used in invite links. |
+| `CLIENT_URL` | Production | Allowed CORS origin and email call-to-action URL. |
+| `VITE_API_URL` | Local only | Backend URL; defaults to `http://localhost:3001` in development. |
+| `SMTP_PASS` | No | Resend API key. Email is logged as a mock when this or `SMTP_FROM` is absent. |
+| `SMTP_FROM` | No | Sender on a verified Resend domain. |
+| `PORT` | No | API/server port; defaults to `3001`. |
+| `CONFIRM_DEMO_RESET` | Seed only | Must equal `RESET_ALL_HIVEMIND_DATA` before seeding. |
+| `DEMO_PASSWORD` | Seed only | Shared demo-account password; generated when empty. |
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Run API and Vite together; either failure stops both. |
+| `npm run dev:server` | Run API with Node's built-in watch mode. |
+| `npm run dev:client` | Run Vite only. |
+| `npm run check` | Syntax check, lint, unit test, and production build. |
+| `npm test` | Run fast unit tests. |
+| `npm run test:e2e` | Run Playwright against a configured disposable Supabase project. |
+| `npm run build` | Build the production frontend. |
+| `npm start` | Serve API and built frontend. |
+| `npm run setup` | Destructively reset and seed demo data after the safety latch is set. |
+
+Playwright starts the API and Vite separately. Missing Supabase credentials therefore fail at backend startup instead of producing a suite of misleading browser `Failed to fetch` errors. Tests mutate and reset data; never run them against production.
+
+## Round and scoring rules
+
+- A game can have at most one active round.
+- Only drafts can be edited, deleted, or published.
+- A round cannot publish before its configured start or after its expiry.
+- Results are private until the scheduler closes and scores the round.
+- Players may revise or clear answers before expiry.
+- Matching ignores case, punctuation, repeated whitespace, and simple trailing plurals.
+- Each answer earns the number of players in its normalized answer group.
+- Tied top scores share first place and each receive a medal.
+
+Email delivery is best effort. Manual sends report sent, skipped, and failed counts. Automated messages use delivery-log deduplication; a failed or unconfigured send removes its log row so a later retry remains possible.
+
+## Schema updates
+
+`supabase/schema.sql` is rerunnable for normal setup. Before applying its new uniqueness constraints to an older database, check for conflicts:
+
+```sql
+select "gameId", count(*)
+from public."Round"
+where status = 'ACTIVE'
+group by "gameId"
+having count(*) > 1;
+
+select "roundId", position, count(*)
+from public."Question"
+group by "roundId", position
+having count(*) > 1;
+
+select "questionId", "normalizedAnswer", count(*)
+from public."QuestionAnswerStat"
+group by "questionId", "normalizedAnswer"
+having count(*) > 1;
+```
+
+Resolve any returned rows, then rerun the schema. Application-level guards remain active before the constraints land.
 
 ## Deployment
 
-### Blueprint
-1. In Render, click **New +** → **Blueprint**.
-2. Connect your GitHub repo.
-3. Render reads `render.yaml` and creates the service.
+[`render.yaml`](render.yaml) defines a Node 22 Render web service using deterministic `npm ci && npm run build`, `npm start`, and `/api/health`.
 
-### Manual Web Service
-- Build Command: `npm install && npm run build`
-- Start Command: `npm start`
-- Runtime: Node 22+
-- Health Check Path: `/api/health`
-- Set env vars per [Environment Variables](#environment-variables), using the deployed Render URL instead of localhost for `BASE_URL`/`CLIENT_URL`.
+1. Create a Render Blueprint from this repository, or configure the same commands manually.
+2. Set production values for `BASE_URL`, `CLIENT_URL`, Supabase credentials, and optional Resend credentials.
+3. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
+4. Confirm the GitHub deployment and Render health check use the same commit SHA.
 
-Both paths get a dependency-free `GET /api/health` check (`healthCheckPath` in `render.yaml` for the Blueprint path) so Render confirms the service booted before routing traffic to it. It's a deploy-health check, not a keep-alive; the free tier still spins the service down after ~15min idle.
+Render's free tier may cold-start after inactivity. Allow a bounded startup window before treating the first `503` as an application failure; repeated probes can trigger provider rate limits.
 
-## Environment Variables
-Full defaults and comments are in [`.env.example`](.env.example).
+Supabase's free tier may pause inactive projects. The bottom of [`supabase/schema.sql`](supabase/schema.sql) includes an optional `pg_cron` keepalive example.
 
-- `PORT`: backend port (default `3001`).
-- `BASE_URL`: public URL of the backend.
-- `CLIENT_URL`: allowed frontend origin.
-- `VITE_API_URL`: backend URL the frontend calls in local development (defaults to `http://localhost:3001`).
-- `SUPABASE_URL`: Supabase **project** URL (Settings → API → Project URL, e.g. `https://xxxx.supabase.co`), not the `/rest/v1/` REST endpoint.
-- `SUPABASE_SERVICE_ROLE_KEY`: server-only `service_role` key (Settings → API). Bypasses row-level security by design, never expose it client-side.
-- `SESSION_SECRET`: random string used to sign session cookies.
-- `SMTP_PASS` / `SMTP_FROM`: optional, enables reminder/notification emails via Resend's HTTPS API (`SMTP_PASS` is the Resend API key); without both set, sends are skipped and logged instead. Resend sandboxes delivery to the account owner's own address until a domain is verified at [resend.com/domains](https://resend.com/domains); point `SMTP_FROM` at an address on that verified domain to email actual players.
-- `DEMO_PASSWORD`: shared password for demo accounts seeded by `npm run setup` (auto-generated + printed once if unset).
+## Security and operations
+
+- Row-level security is enabled with no browser-facing policies; only the server uses the service-role key.
+- Session cookies are HTTP-only, same-site, and secure in production.
+- Auth, join, and email endpoints are rate-limited.
+- CI runs source checks, tests, a production build, and a blocking production dependency audit.
+- Dependabot opens bounded npm and GitHub Actions updates; CodeQL scans JavaScript.
+
+For a failed deploy, check `/api/health`, Render logs, required environment variables, and Supabase availability in that order.
+
+## Backlog
+
+Higher-lift ideas intentionally left for future product decisions:
+
+- Voting on player-submitted questions
+- Configurable scoring modes
+- Scheduled or recurring round publishing
+- Co-admin roles
+- Web-push notifications
+- Bulk email invitations

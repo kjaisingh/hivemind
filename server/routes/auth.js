@@ -1,22 +1,12 @@
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
-import { z } from 'zod';
 import { passport } from '../auth.js';
-import { supabase, unwrap } from '../db.js';
+import { isUniqueViolation, supabase, unwrap } from '../db.js';
 import { claimPendingInvite, ensureMembership } from '../helpers.js';
 import { joinLimiter, loginLimiter, signupLimiter } from '../limiters.js';
+import { loginSchema, signUpSchema, validationMessage } from '../validation.js';
 
 const router = Router();
-
-const signUpSchema = z.object({
-  email: z.string().email('Enter a valid email address.').toLowerCase(),
-  username: z
-    .string()
-    .min(3, 'Username must be at least 3 characters.')
-    .max(24, 'Username must be 24 characters or fewer.')
-    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.').max(72, 'Password must be 72 characters or fewer.'),
-});
 
 router.get('/auth/me', (req, res) => {
   if (!req.user) {
@@ -35,7 +25,7 @@ router.get('/auth/me', (req, res) => {
 router.post('/auth/signup', signupLimiter, async (req, res) => {
   const parsed = signUpSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: parsed.error.issues[0].message });
+    return res.status(400).json({ message: validationMessage(parsed) });
   }
 
   const { email, username, password } = parsed.data;
@@ -49,7 +39,15 @@ router.post('/auth/signup', signupLimiter, async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = unwrap(await supabase.from('User').insert({ email, username, passwordHash }).select().single());
+  let user;
+  try {
+    user = unwrap(await supabase.from('User').insert({ email, username, passwordHash }).select().single());
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return res.status(409).json({ message: 'Email or username is already in use.' });
+    }
+    throw error;
+  }
 
   req.login(user, (error) => {
     if (error) {
@@ -70,9 +68,11 @@ router.post('/auth/signup', signupLimiter, async (req, res) => {
 });
 
 router.post('/auth/login', loginLimiter, (req, res, next) => {
-  if (typeof req.body.email === 'string') {
-    req.body.email = req.body.email.toLowerCase();
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: validationMessage(parsed) });
   }
+  req.body = parsed.data;
 
   passport.authenticate('local', (error, user) => {
     if (error || !user) {

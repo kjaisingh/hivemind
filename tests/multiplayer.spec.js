@@ -59,7 +59,7 @@ test('two players who answer identically tie for rank 1 and both earn a medal', 
   for (const p of [adminPage, playerPage]) {
     await p.getByLabel('Favorite color?').fill('Blue');
     await p.getByLabel('Favorite season?').fill('Summer');
-    await p.getByRole('button', { name: 'Save' }).click();
+    await p.getByRole('button', { name: 'Save Answers' }).click();
     await expect(p.getByText('Answers saved.')).toBeVisible();
   }
 

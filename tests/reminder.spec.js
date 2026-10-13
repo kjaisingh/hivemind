@@ -56,15 +56,15 @@ test('admin can remind players with unanswered questions, and non-admins cannot'
   // Admin answers their own copy first, so only the player remains pending.
   await adminPage.reload();
   await adminPage.getByLabel('Favorite food?').fill('Tacos');
-  await adminPage.getByRole('button', { name: 'Save' }).click();
+  await adminPage.getByRole('button', { name: 'Save Answers' }).click();
   await expect(adminPage.getByText('Answers saved.')).toBeVisible();
 
   await adminPage.getByRole('button', { name: 'Remind pending players' }).click();
-  await expect(adminPage.getByText('Reminded 1 player(s) with unanswered questions.')).toBeVisible();
+  await expect(adminPage.getByText(/Reminded 1 player|1 player.*pending.*no reminder emails/)).toBeVisible();
 
   // Player answers, then the admin reminding again finds nobody pending.
   await playerPage.getByLabel('Favorite food?').fill('Pizza');
-  await playerPage.getByRole('button', { name: 'Save' }).click();
+  await playerPage.getByRole('button', { name: 'Save Answers' }).click();
   await expect(playerPage.getByText('Answers saved.')).toBeVisible();
 
   await adminPage.getByRole('button', { name: 'Remind pending players' }).click();

@@ -1,19 +1,38 @@
 import { Router } from 'express';
-import { z } from 'zod';
-import { supabase, unwrap } from '../db.js';
+import { isUniqueViolation, supabase, unwrap } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { getDashboardData, getGameDetail } from '../repository.js';
 import { processRounds } from '../roundScheduler.js';
-import { createGameCode, createInviteToken } from '../utils.js';
+import { createGameCode, createInviteToken, rankByPoints } from '../utils.js';
 import { buildGameInvite, ensureMembership, getRole } from '../helpers.js';
 import { joinLimiter } from '../limiters.js';
+import { gameSchema, joinGameSchema, validationMessage } from '../validation.js';
 
 const router = Router();
 
-const gameSchema = z.object({
-  name: z.string().min(2).max(80),
-  description: z.string().min(2).max(240),
-});
+const GAME_ID_ATTEMPTS = 5;
+
+async function insertGame(details, adminId) {
+  for (let attempt = 0; attempt < GAME_ID_ATTEMPTS; attempt += 1) {
+    try {
+      return unwrap(
+        await supabase
+          .from('Game')
+          .insert({
+            ...details,
+            code: createGameCode(),
+            inviteToken: createInviteToken(),
+            adminId,
+          })
+          .select()
+          .single(),
+      );
+    } catch (error) {
+      if (!isUniqueViolation(error) || attempt === GAME_ID_ATTEMPTS - 1) throw error;
+    }
+  }
+  return null;
+}
 
 router.get('/dashboard', requireAuth, async (req, res) => {
   await processRounds(supabase);
@@ -57,28 +76,17 @@ router.get('/dashboard', requireAuth, async (req, res) => {
 router.post('/games', requireAuth, async (req, res) => {
   const parsed = gameSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: 'Invalid game details.' });
+    return res.status(400).json({ message: validationMessage(parsed, 'Invalid game details.') });
   }
 
-  const code = createGameCode();
-  const inviteToken = createInviteToken();
-
-  const game = unwrap(
-    await supabase
-      .from('Game')
-      .insert({
-        name: parsed.data.name,
-        description: parsed.data.description,
-        code,
-        inviteToken,
-        adminId: req.user.id,
-      })
-      .select()
-      .single(),
-  );
-
-  unwrap(await supabase.from('GameMembership').insert({ gameId: game.id, userId: req.user.id, role: 'ADMIN' }));
-  unwrap(await supabase.from('GameEmailSettings').insert({ gameId: game.id }));
+  const game = await insertGame(parsed.data, req.user.id);
+  try {
+    unwrap(await supabase.from('GameMembership').insert({ gameId: game.id, userId: req.user.id, role: 'ADMIN' }));
+    unwrap(await supabase.from('GameEmailSettings').insert({ gameId: game.id }));
+  } catch (error) {
+    await supabase.from('Game').delete().eq('id', game.id);
+    throw error;
+  }
 
   res.json({
     game: {
@@ -89,7 +97,11 @@ router.post('/games', requireAuth, async (req, res) => {
 });
 
 router.post('/games/join', requireAuth, joinLimiter, async (req, res) => {
-  const code = String(req.body.code || '').trim().toUpperCase();
+  const parsed = joinGameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: validationMessage(parsed) });
+  }
+  const { code } = parsed.data;
   const game = unwrap(await supabase.from('Game').select('*').eq('code', code).maybeSingle());
   if (!game) {
     return res.status(404).json({ message: 'Game code not found.' });
@@ -116,15 +128,14 @@ router.get('/games/:gameId', requireAuth, async (req, res) => {
   const pastRounds = rounds.filter((round) => round.status === 'CLOSED');
   const draftRounds = rounds.filter((round) => round.status === 'DRAFT');
 
-  const leaderboard = memberships
-    .map((membership) => ({
+  const leaderboard = rankByPoints(
+    memberships.map((membership) => ({
       userId: membership.userId,
       username: membership.user.username,
       points: scoreMap.get(membership.userId) || 0,
       medals: medalMap.get(membership.userId) || 0,
-    }))
-    .sort((a, b) => b.points - a.points)
-    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+    })),
+  );
 
   let answers = [];
   if (activeRound) {

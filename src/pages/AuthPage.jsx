@@ -1,25 +1,31 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 
 export default function AuthPage() {
   const [isSignup, setIsSignup] = useState(true);
   const [form, setForm] = useState({ email: '', username: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { refresh } = useAuth();
 
   const invite = useMemo(() => searchParams.get('invite') || '', [searchParams]);
-  const next = useMemo(() => searchParams.get('next') || '/dashboard', [searchParams]);
+  const next = useMemo(() => {
+    const requested = searchParams.get('next') || '/dashboard';
+    return requested.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
+  }, [searchParams]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
+    setSubmitting(true);
 
     if (isSignup && form.password !== form.confirmPassword) {
       setError('Passwords do not match.');
+      setSubmitting(false);
       return;
     }
 
@@ -47,19 +53,23 @@ export default function AuthPage() {
       navigate(next);
     } catch (submitError) {
       setError(submitError.message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="page auth-page">
+    <main className="page auth-page">
       <div className="card auth-card">
         <h1>{isSignup ? 'Create account' : 'Welcome back'}</h1>
         <p>Use your username on all leaderboards. Keep it iconic.</p>
 
         <form className="stack" onSubmit={handleSubmit}>
           <input
+            aria-label="Email address"
             placeholder="Email"
             type="email"
+            autoComplete="email"
             value={form.email}
             onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
             required
@@ -67,7 +77,11 @@ export default function AuthPage() {
 
           {isSignup && (
             <input
+              aria-label="Username"
               placeholder="Username (letters, numbers, underscore)"
+              autoComplete="username"
+              minLength={3}
+              maxLength={24}
               value={form.username}
               onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
               required
@@ -75,8 +89,12 @@ export default function AuthPage() {
           )}
 
           <input
+            aria-label="Password"
             placeholder="Password"
             type="password"
+            autoComplete={isSignup ? 'new-password' : 'current-password'}
+            minLength={isSignup ? 8 : 1}
+            maxLength={72}
             value={form.password}
             onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
             required
@@ -84,18 +102,24 @@ export default function AuthPage() {
 
           {isSignup && (
             <input
+              aria-label="Confirm password"
               placeholder="Confirm password"
               type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={72}
               value={form.confirmPassword}
               onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
               required
             />
           )}
 
-          <button className="button" type="submit">{isSignup ? 'Sign up' : 'Login'}</button>
+          <button className="button" type="submit" disabled={submitting}>
+            {submitting ? 'Please wait...' : isSignup ? 'Sign up' : 'Login'}
+          </button>
         </form>
 
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
 
         <button className="link" onClick={() => setIsSignup((prev) => !prev)} type="button">
           {isSignup ? 'Already have an account? Login' : 'Need an account? Sign up'}
@@ -103,6 +127,6 @@ export default function AuthPage() {
 
         <Link className="link" to="/">Back to home</Link>
       </div>
-    </div>
+    </main>
   );
 }

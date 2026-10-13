@@ -16,18 +16,23 @@ export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, reci
 
   if (insertError) {
     if (insertError.code === '23505') {
-      return;
+      return false;
     }
     throw new Error(insertError.message);
   }
 
   try {
-    await sendEmail({
+    const sent = await sendEmail({
       to: recipient.email,
       subject,
       intro,
       gameName,
     });
+    if (!sent) {
+      await supabase.from('EmailDeliveryLog').delete().eq('dedupeKey', dedupeKey);
+      return false;
+    }
+    return true;
   } catch (error) {
     // Delete the dedupe row so a real send failure (e.g. SMTP outage) doesn't
     // permanently block a retry. The unique constraint would silently skip
@@ -36,6 +41,7 @@ export async function sendWithDedup(supabase, { dedupeKey, gameId, roundId, reci
     // triggered it.
     await supabase.from('EmailDeliveryLog').delete().eq('dedupeKey', dedupeKey);
     console.error('[email]', dedupeKey, error);
+    return false;
   }
 }
 
@@ -131,12 +137,14 @@ async function runProcessRounds(supabase) {
 }
 
 export function startRoundScheduler(supabase) {
-  setInterval(async () => {
+  const run = async () => {
     try {
       await processRounds(supabase);
       await sweepExpiredSessions(supabase);
     } catch (error) {
       console.error('[scheduler]', error);
     }
-  }, 60_000);
+  };
+  void run();
+  return setInterval(run, 60_000);
 }

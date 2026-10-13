@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export default function JoinPage() {
   const { inviteToken } = useParams();
   const navigate = useNavigate();
   const [message, setMessage] = useState('Joining game...');
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     async function join() {
@@ -18,6 +19,7 @@ export default function JoinPage() {
         navigate(`/games/${data.gameId}`);
       } catch (error) {
         setMessage(error.message);
+        setFailed(true);
       }
     }
 
@@ -26,7 +28,10 @@ export default function JoinPage() {
 
   return (
     <div className="page">
-      <div className="card"><p>{message}</p></div>
+      <div className="card stack">
+        <p className={failed ? 'error' : undefined} role={failed ? 'alert' : undefined}>{message}</p>
+        {failed && <Link className="button button-secondary" to="/dashboard">Back to dashboard</Link>}
+      </div>
     </div>
   );
 }

@@ -21,8 +21,8 @@
     "setup": "npm run db:seed"
   },
   "keywords": ["multiplayer", "party-game", "react", "express"],
-  "author": "Karan Jaisingh",
-  "license": "MIT",
+  "author": "kjaisingh",
+  "license": "ISC",
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
     "@vitejs/plugin-react": "^6.1.2",

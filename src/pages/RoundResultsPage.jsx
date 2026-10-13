@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 
 export default function RoundResultsPage() {
   const { gameId, roundId } = useParams();
@@ -24,7 +24,12 @@ export default function RoundResultsPage() {
   }, []);
 
   if (error) {
-    return <div className="page"><p className="error" role="alert">{error}</p></div>;
+    return (
+      <div className="page stack">
+        <p className="error" role="alert">{error}</p>
+        <Link className="button button-secondary" to={`/games/${gameId}`}>Back to game</Link>
+      </div>
+    );
   }
 
   if (!round) {
@@ -32,7 +37,7 @@ export default function RoundResultsPage() {
   }
 
   return (
-    <div className="page stack-lg">
+    <main className="page stack-lg">
       <header className="row-between">
         <div>
           <h1>{round.gameName}: {round.name}</h1>
@@ -106,6 +111,16 @@ export default function RoundResultsPage() {
                   </ResponsiveContainer>
                 </div>
               )}
+              {question.stats.length > 0 && (
+                <ul className="result-data" aria-label={`Response totals for ${question.prompt}`}>
+                  {question.stats.map((stat) => (
+                    <li key={stat.id || stat.normalizedAnswer}>
+                      <span>{stat.displayAnswer}</span>
+                      <strong>{stat.count} ({stat.percentage.toFixed(1)}%)</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </article>
           );
         })}
@@ -118,6 +133,6 @@ export default function RoundResultsPage() {
         </div>
         <Link className="button" to={`/games/${gameId}`}>Season leaderboard</Link>
       </section>
-    </div>
+    </main>
   );
 }

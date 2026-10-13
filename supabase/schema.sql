@@ -48,10 +48,19 @@ create table if not exists public."Round" (
   "expiresAt" timestamptz not null,
   "publishedAt" timestamptz,
   "announcementEmail" text,
-  "createdAt" timestamptz not null default timezone('utc', now())
+  "createdAt" timestamptz not null default timezone('utc', now()),
+  constraint "Round_dates_check" check ("expiresAt" > "startsAt")
 );
 
 create index if not exists "Round_gameId_idx" on public."Round" ("gameId");
+create unique index if not exists "Round_one_active_per_game_idx"
+  on public."Round" ("gameId") where status = 'ACTIVE';
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'Round_dates_check') then
+    alter table public."Round" add constraint "Round_dates_check" check ("expiresAt" > "startsAt");
+  end if;
+end $$;
 
 create table if not exists public."Question" (
   id uuid primary key default gen_random_uuid(),
@@ -66,6 +75,8 @@ alter table public."Question" add column if not exists type text not null defaul
 alter table public."Question" add column if not exists choices jsonb;
 alter table public."Question" drop constraint if exists "Question_type_check";
 alter table public."Question" add constraint "Question_type_check" check (type in ('TEXT', 'MULTIPLE_CHOICE'));
+create unique index if not exists "Question_roundId_position_idx"
+  on public."Question" ("roundId", position);
 
 create index if not exists "Question_roundId_idx" on public."Question" ("roundId");
 
@@ -112,6 +123,8 @@ create table if not exists public."QuestionAnswerStat" (
 );
 
 create index if not exists "QuestionAnswerStat_questionId_idx" on public."QuestionAnswerStat" ("questionId");
+create unique index if not exists "QuestionAnswerStat_questionId_normalizedAnswer_idx"
+  on public."QuestionAnswerStat" ("questionId", "normalizedAnswer");
 
 create table if not exists public."GameEmailSettings" (
   id uuid primary key default gen_random_uuid(),
@@ -125,11 +138,19 @@ create table if not exists public."EmailDeliveryLog" (
   id uuid primary key default gen_random_uuid(),
   "dedupeKey" text not null unique,
   "gameId" uuid not null references public."Game"(id) on delete cascade,
-  "roundId" uuid,
+  "roundId" uuid references public."Round"(id) on delete cascade,
   "recipientId" uuid not null references public."User"(id) on delete cascade,
   "emailType" text not null,
   "sentAt" timestamptz not null default timezone('utc', now())
 );
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'EmailDeliveryLog_roundId_fkey') then
+    alter table public."EmailDeliveryLog"
+      add constraint "EmailDeliveryLog_roundId_fkey"
+      foreign key ("roundId") references public."Round"(id) on delete cascade;
+  end if;
+end $$;
 
 create table if not exists public."Session" (
   sid text primary key,

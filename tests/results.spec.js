@@ -54,16 +54,16 @@ test('differentiated answers produce split scores, a rank break, and a no-answer
   // Admin and B agree on color, disagree on season; C answers color differently and skips season entirely.
   await adminPage.getByLabel('Favorite color?').fill('Blue');
   await adminPage.getByLabel('Favorite season?').fill('Summer');
-  await adminPage.getByRole('button', { name: 'Save' }).click();
+  await adminPage.getByRole('button', { name: 'Save Answers' }).click();
   await expect(adminPage.getByText('Answers saved.')).toBeVisible();
 
   await bPage.getByLabel('Favorite color?').fill('Blue');
   await bPage.getByLabel('Favorite season?').fill('Winter');
-  await bPage.getByRole('button', { name: 'Save' }).click();
+  await bPage.getByRole('button', { name: 'Save Answers' }).click();
   await expect(bPage.getByText('Answers saved.')).toBeVisible();
 
   await cPage.getByLabel('Favorite color?').fill('Red');
-  await cPage.getByRole('button', { name: 'Save' }).click();
+  await cPage.getByRole('button', { name: 'Save Answers' }).click();
   await expect(cPage.getByText('Answers saved.')).toBeVisible();
 
   const waitMs = new Date(expiresAt).getTime() - Date.now() + 2_000;

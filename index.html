@@ -1,15 +1,14 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <script>
-      (function () {
-        var stored = localStorage.getItem('hivemind-theme');
-        var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-theme', theme);
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Hivemind is a multiplayer social guessing game where matching your group earns points." />
+    <meta name="theme-color" content="#2563eb" />
+    <meta property="og:title" content="Hivemind — Think like your group" />
+    <meta property="og:description" content="Create rounds, compare answers, and discover who thinks most like the hive." />
+    <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Hivemind</title>
   </head>

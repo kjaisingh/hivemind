@@ -4,6 +4,7 @@ export default function ManualEmailForm({ manualEmail, setManualEmail, sendingEm
       <input
         aria-label="Subject"
         placeholder="Subject"
+        maxLength={200}
         value={manualEmail.subject}
         onChange={(event) => setManualEmail((prev) => ({ ...prev, subject: event.target.value }))}
         required
@@ -11,6 +12,7 @@ export default function ManualEmailForm({ manualEmail, setManualEmail, sendingEm
       <textarea
         aria-label="Message"
         placeholder="Message"
+        maxLength={5000}
         value={manualEmail.message}
         onChange={(event) => setManualEmail((prev) => ({ ...prev, message: event.target.value }))}
         required

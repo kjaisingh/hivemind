@@ -32,9 +32,17 @@ export async function api(path, { timeoutMs = 15000, ...options } = {}) {
     return null;
   }
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  let data = null;
+  if (contentType.includes('application/json')) {
+    data = await response.json().catch(() => null);
+  } else {
+    const text = await response.text();
+    data = text && !text.trimStart().startsWith('<') ? text : null;
+  }
   if (!response.ok) {
-    throw new Error(data.message || 'Request failed');
+    const message = typeof data === 'string' ? data : data?.message;
+    throw new Error(message || `Request failed (${response.status}). Please try again.`);
   }
 
   return data;

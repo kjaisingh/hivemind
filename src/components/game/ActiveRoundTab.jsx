@@ -4,6 +4,8 @@ export default function ActiveRoundTab({
   game,
   answers,
   setAnswers,
+  answersDirty,
+  progress,
   roundExpired,
   onExpire,
   savingAnswers,
@@ -19,8 +21,13 @@ export default function ActiveRoundTab({
         <>
           <div className="row-between">
             <div>
-              <h2>{game.activeRound.name}</h2>
-              <p>{game.activeRound.description}</p>
+            <h2>{game.activeRound.name}</h2>
+            <p>{game.activeRound.description}</p>
+            {progress && (
+              <p className="small" aria-live="polite">
+                {progress.submittedCount} of {progress.totalCount} players submitted
+              </p>
+            )}
             </div>
             <div className="stack stack-end">
               <Countdown expiresAt={game.activeRound.expiresAt} onExpire={onExpire} />
@@ -45,11 +52,21 @@ export default function ActiveRoundTab({
                         value={choice}
                         checked={answers[question.id] === choice}
                         onChange={() => setAnswers((prev) => ({ ...prev, [question.id]: choice }))}
-                        disabled={roundExpired}
+                        disabled={roundExpired || savingAnswers}
                       />
                       <span>{choice}</span>
                     </label>
                   ))}
+                  {answers[question.id] && (
+                    <button
+                      className="link clear-answer"
+                      type="button"
+                      onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: '' }))}
+                      disabled={savingAnswers}
+                    >
+                      Clear answer
+                    </button>
+                  )}
                 </div>
               ) : (
                 <input
@@ -57,15 +74,22 @@ export default function ActiveRoundTab({
                   value={answers[question.id] || ''}
                   onChange={(event) => setAnswers((prev) => ({ ...prev, [question.id]: event.target.value }))}
                   placeholder="Your answer"
-                  disabled={roundExpired}
+                  maxLength={500}
+                  disabled={roundExpired || savingAnswers}
                 />
               )}
             </div>
           ))}
 
-          <button className="button" type="button" onClick={onSave} disabled={roundExpired || savingAnswers}>
-            {savingAnswers ? 'Saving...' : 'Save'}
-          </button>
+          <div className="answer-actions row-between">
+            <p className="small">
+              {Object.values(answers).filter((answer) => answer.trim()).length} of {game.activeRound.questions.length} answered
+              {' · '}{answersDirty ? 'Unsaved changes' : 'Saved'}
+            </p>
+            <button className="button" type="button" onClick={onSave} disabled={roundExpired || savingAnswers || !answersDirty}>
+              {savingAnswers ? 'Saving...' : roundExpired ? 'Round closed' : 'Save Answers'}
+            </button>
+          </div>
         </>
       )}
     </section>

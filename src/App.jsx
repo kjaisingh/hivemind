@@ -7,6 +7,7 @@ import GamePage from './pages/GamePage';
 import JoinPage from './pages/JoinPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ThemeToggle from './components/ThemeToggle';
+import NotFoundPage from './pages/NotFoundPage';
 
 const RoundResultsPage = lazy(() => import('./pages/RoundResultsPage'));
 
@@ -43,6 +44,7 @@ export default function App() {
             </ProtectedRoute>
           )}
         />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <ThemeToggle />
     </>

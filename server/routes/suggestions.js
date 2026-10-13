@@ -1,15 +1,11 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { supabase, unwrap } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { getSuggestionsForGame } from '../repository.js';
 import { getRole } from '../helpers.js';
+import { promotionSchema, suggestionSchema, validationMessage } from '../validation.js';
 
 const router = Router();
-
-const suggestionSchema = z.object({
-  prompt: z.string().min(1).max(240),
-});
 
 router.post('/games/:gameId/suggestions', requireAuth, async (req, res) => {
   const role = await getRole(req.params.gameId, req.user.id);
@@ -19,7 +15,7 @@ router.post('/games/:gameId/suggestions', requireAuth, async (req, res) => {
 
   const parsed = suggestionSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: 'Invalid suggestion.' });
+    return res.status(400).json({ message: validationMessage(parsed, 'Invalid suggestion.') });
   }
 
   const suggestion = unwrap(
@@ -69,9 +65,18 @@ router.post('/games/:gameId/suggestions/:suggestionId/dismiss', requireAuth, asy
     return res.status(400).json({ message: 'Only pending suggestions can be dismissed.' });
   }
 
-  unwrap(
-    await supabase.from('QuestionSuggestion').update({ status: 'DISMISSED' }).eq('id', req.params.suggestionId),
+  const dismissed = unwrap(
+    await supabase
+      .from('QuestionSuggestion')
+      .update({ status: 'DISMISSED' })
+      .eq('id', req.params.suggestionId)
+      .eq('status', 'PENDING')
+      .select('id')
+      .maybeSingle(),
   );
+  if (!dismissed) {
+    return res.status(409).json({ message: 'Suggestion was already reviewed.' });
+  }
 
   res.json({ ok: true });
 });
@@ -97,11 +102,16 @@ router.post('/games/:gameId/suggestions/:suggestionId/promote', requireAuth, asy
     return res.status(400).json({ message: 'Only pending suggestions can be promoted.' });
   }
 
+  const parsed = promotionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: validationMessage(parsed) });
+  }
+
   const round = unwrap(
     await supabase
       .from('Round')
       .select('*')
-      .eq('id', String(req.body.roundId || ''))
+      .eq('id', parsed.data.roundId)
       .eq('gameId', req.params.gameId)
       .maybeSingle(),
   );
@@ -113,22 +123,40 @@ router.post('/games/:gameId/suggestions/:suggestionId/promote', requireAuth, asy
   }
 
   const questions = unwrap(await supabase.from('Question').select('position').eq('roundId', round.id));
+  if (questions.length >= 20) {
+    return res.status(409).json({ message: 'Round already has the maximum 20 questions.' });
+  }
   const nextPosition = questions.reduce((max, question) => Math.max(max, question.position), 0) + 1;
 
-  unwrap(
-    await supabase.from('Question').insert({
-      roundId: round.id,
-      prompt: suggestion.prompt,
-      position: nextPosition,
-    }),
-  );
-
-  unwrap(
+  const promoted = unwrap(
     await supabase
       .from('QuestionSuggestion')
       .update({ status: 'PROMOTED', promotedRoundId: round.id })
-      .eq('id', req.params.suggestionId),
+      .eq('id', req.params.suggestionId)
+      .eq('status', 'PENDING')
+      .select('id')
+      .maybeSingle(),
   );
+  if (!promoted) {
+    return res.status(409).json({ message: 'Suggestion was already reviewed.' });
+  }
+
+  try {
+    unwrap(
+      await supabase.from('Question').insert({
+        roundId: round.id,
+        prompt: suggestion.prompt,
+        position: nextPosition,
+      }),
+    );
+  } catch (error) {
+    await supabase
+      .from('QuestionSuggestion')
+      .update({ status: 'PENDING', promotedRoundId: null })
+      .eq('id', req.params.suggestionId)
+      .eq('status', 'PROMOTED');
+    throw error;
+  }
 
   res.json({ ok: true });
 });

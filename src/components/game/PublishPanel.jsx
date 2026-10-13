@@ -42,7 +42,7 @@ export default function PublishPanel({
         </div>
       )}
       <form className="stack" onSubmit={onPublish}>
-        <select value={draftToPublish} onChange={(event) => setDraftToPublish(event.target.value)}>
+        <select aria-label="Draft round to publish" value={draftToPublish} onChange={(event) => setDraftToPublish(event.target.value)}>
           <option value="">Select draft round</option>
           {draftRounds.map((round) => (
             <option key={round.id} value={round.id}>
@@ -51,10 +51,11 @@ export default function PublishPanel({
           ))}
         </select>
         <textarea
+          aria-label="Release announcement"
           placeholder="Release announcement email"
           value={announcement}
           onChange={(event) => setAnnouncement(event.target.value)}
-          required
+          maxLength={5000}
         />
         <button className="button" type="submit" disabled={publishing || !draftToPublish}>
           {publishing ? 'Publishing...' : 'Publish'}

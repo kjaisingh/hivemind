@@ -13,8 +13,9 @@ export function createInviteToken() {
 export function normalizeAnswer(answer) {
   return answer
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
@@ -31,4 +32,18 @@ export function toHoursArray(csv) {
     .split(',')
     .map((value) => Number(value.trim()))
     .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+export function rankByPoints(entries) {
+  let previousPoints = null;
+  let currentRank = 0;
+  return [...entries]
+    .sort((a, b) => b.points - a.points || a.username.localeCompare(b.username))
+    .map((entry, index) => {
+      if (entry.points !== previousPoints) {
+        currentRank = index + 1;
+        previousPoints = entry.points;
+      }
+      return { ...entry, rank: currentRank };
+    });
 }
