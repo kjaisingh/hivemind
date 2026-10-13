@@ -9,10 +9,11 @@ export function getUrgencyTier(expiresAt, now = dayjs()) {
 }
 
 export function formatTimeRemaining(expiresAt, now = dayjs()) {
-  const diff = dayjs(expiresAt).diff(now, 'minute');
-  if (diff <= 0) return 'closed';
-  const hours = Math.floor(diff / 60);
-  const minutes = diff % 60;
+  const diffSeconds = dayjs(expiresAt).diff(now, 'second');
+  if (diffSeconds <= 0) return 'closed';
+  const totalMinutes = Math.ceil(diffSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   return hours > 0 ? `${hours}h ${minutes}m left` : `${minutes}m left`;
 }
 

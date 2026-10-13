@@ -6,6 +6,8 @@ import { supabase, unwrap } from '../server/db.js';
 import { normalizeAnswer } from '../server/utils.js';
 import { scoreRound } from '../server/scoring.js';
 
+const RESET_CONFIRMATION = 'RESET_ALL_HIVEMIND_DATA';
+
 async function wipeExistingData() {
   unwrap(await supabase.from('Session').delete().not('sid', 'is', null));
   unwrap(await supabase.from('Game').delete().not('id', 'is', null));
@@ -28,6 +30,12 @@ async function createSubmission(questionId, userId, answer) {
 }
 
 async function main() {
+  if (process.env.CONFIRM_DEMO_RESET !== RESET_CONFIRMATION) {
+    throw new Error(
+      `Refusing to delete existing data. Set CONFIRM_DEMO_RESET=${RESET_CONFIRMATION} only for a disposable demo/test database.`,
+    );
+  }
+
   const demoPassword = process.env.DEMO_PASSWORD || nanoid(16);
   if (!process.env.DEMO_PASSWORD) {
     console.log(`No DEMO_PASSWORD set — generated one. Save it to .env: DEMO_PASSWORD=${demoPassword}`);
