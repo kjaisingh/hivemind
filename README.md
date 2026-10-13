@@ -154,11 +154,15 @@ Render's free tier may cold-start after inactivity. Allow a bounded startup wind
 
 ### Supabase free-tier keepalive
 
-Supabase may pause free projects with insufficient user database activity over seven days. The [Supabase keepalive workflow](.github/workflows/keepalive.yml) calls `GET /api/keepalive` daily. Each uncached call makes three fixed, read-only database queries and returns no database data. Successful probes are cached for six hours to bound traffic to the public endpoint. `/api/health` remains a shallow process check for Render.
+Supabase may pause free projects with insufficient user database activity over seven days. The [Supabase keepalive workflow](.github/workflows/keepalive.yml) calls `GET /api/keepalive` daily at 13:23 UTC. Each uncached call makes three fixed, read-only database queries and returns no database data. Successful probes are cached for six hours to bound traffic to the public endpoint. `/api/health` remains a shallow process check for Render.
 
-The workflow can also be run from **Actions → Supabase keepalive → Run workflow**. A `503` means the database could not be reached; resume the project in Supabase, then run the workflow again.
+The workflow can also run from **Actions → Supabase keepalive → Run workflow**. A `503` response means the database could not be reached; resume the project in Supabase, then run the workflow again.
 
-This follows Supabase's current guidance that a few application/API database requests each day are normally enough to avoid pausing, but only a paid plan guarantees that a project will never pause. GitHub also [disables scheduled workflows in public repositories after 60 days without repository activity](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). If this repository may remain untouched that long, configure a free external scheduler to request `https://hivemind-ev7a.onrender.com/api/keepalive` once daily. Do not use a high-frequency uptime monitor: it would add no database benefit during the six-hour cooldown and may unnecessarily keep the free Render service awake.
+Production also runs [`supabase/keepalive.sql`](supabase/keepalive.sql) at 01:23 UTC. This Supabase Cron job uses `pg_net` to call the same public endpoint, twelve hours away from the GitHub run. Apply this file only to the production Hivemind project because the callback targets the production Render service.
+
+The two schedules provide independent triggers. The Supabase callback does not depend on GitHub repository activity, while GitHub remains an externally visible failure signal. This matters because GitHub [disables scheduled workflows in public repositories after 60 days without repository activity](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). A separate external scheduler is therefore optional rather than required.
+
+This follows Supabase's current guidance that a few application/API database requests each day are normally enough to avoid pausing, but only a paid plan guarantees the project will never pause. Do not use a high-frequency uptime monitor: it would add no database benefit during the six-hour cooldown and may unnecessarily keep the free Render service awake.
 
 See [Supabase's project pausing documentation](https://supabase.com/docs/guides/platform/free-project-pausing) for current policy details.
 
