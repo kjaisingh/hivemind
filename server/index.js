@@ -5,6 +5,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { supabase } from './db.js';
+import { createKeepaliveProbe } from './keepalive.js';
+import { keepaliveLimiter } from './limiters.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
 import { startRoundScheduler } from './roundScheduler.js';
 import authRoutes from './routes/auth.js';
@@ -31,6 +33,19 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.PORT || 3001);
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const runKeepalive = createKeepaliveProbe(supabase);
+
+app.get('/api/keepalive', keepaliveLimiter, async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    const { cached } = await runKeepalive();
+    res.status(200).json({ status: 'ok', database: 'reachable', cached });
+  } catch (error) {
+    console.error('[keepalive]', error);
+    res.status(503).json({ status: 'unavailable', database: 'unreachable' });
+  }
+});
 
 app.use(
   cors({

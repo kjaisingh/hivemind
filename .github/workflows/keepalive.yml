@@ -1,0 +1,27 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '23 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query Supabase through production app
+        env:
+          KEEPALIVE_URL: https://hivemind-ev7a.onrender.com/api/keepalive
+        run: >-
+          curl --fail-with-body --silent --show-error --location
+          --connect-timeout 20 --max-time 60
+          --retry 3 --retry-delay 15 --retry-max-time 280 --retry-all-errors
+          "$KEEPALIVE_URL"

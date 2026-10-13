@@ -152,7 +152,15 @@ Resolve any returned rows, then rerun the schema. Application-level guards remai
 
 Render's free tier may cold-start after inactivity. Allow a bounded startup window before treating the first `503` as an application failure; repeated probes can trigger provider rate limits.
 
-Supabase's free tier may pause inactive projects. The bottom of [`supabase/schema.sql`](supabase/schema.sql) includes an optional `pg_cron` keepalive example.
+### Supabase free-tier keepalive
+
+Supabase may pause free projects with insufficient user database activity over seven days. The [Supabase keepalive workflow](.github/workflows/keepalive.yml) calls `GET /api/keepalive` daily. Each uncached call makes three fixed, read-only database queries and returns no database data. Successful probes are cached for six hours to bound traffic to the public endpoint. `/api/health` remains a shallow process check for Render.
+
+The workflow can also be run from **Actions → Supabase keepalive → Run workflow**. A `503` means the database could not be reached; resume the project in Supabase, then run the workflow again.
+
+This follows Supabase's current guidance that a few application/API database requests each day are normally enough to avoid pausing, but only a paid plan guarantees that a project will never pause. GitHub also [disables scheduled workflows in public repositories after 60 days without repository activity](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). If this repository may remain untouched that long, configure a free external scheduler to request `https://hivemind-ev7a.onrender.com/api/keepalive` once daily. Do not use a high-frequency uptime monitor: it would add no database benefit during the six-hour cooldown and may unnecessarily keep the free Render service awake.
+
+See [Supabase's project pausing documentation](https://supabase.com/docs/guides/platform/free-project-pausing) for current policy details.
 
 ## Security and operations
 
