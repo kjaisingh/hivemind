@@ -1,18 +1,14 @@
--- Run this only in the production Hivemind project. The callback reaches the
--- deployed app, which makes qualifying PostgREST reads without exposing a
--- Supabase key in this job.
-create extension if not exists pg_cron;
-create extension if not exists pg_net;
-
-select cron.unschedule(jobid)
-from cron.job
-where jobname = 'hivemind-keepalive';
-
-select cron.schedule(
-  'hivemind-keepalive',
-  '23 1 * * *',
-  $$select net.http_get(
-    url := 'https://hivemind-ev7a.onrender.com/api/keepalive',
-    timeout_milliseconds := 90000
-  );$$
+-- Apply after schema.sql. The public row contains no application data.
+create table if not exists public.keepalive (
+  id smallint primary key check (id = 1)
 );
+
+insert into public.keepalive (id) values (1) on conflict do nothing;
+
+alter table public.keepalive enable row level security;
+revoke all on table public.keepalive from public, anon, authenticated;
+grant select on table public.keepalive to anon;
+
+drop policy if exists keepalive_anon_read on public.keepalive;
+create policy keepalive_anon_read on public.keepalive
+  for select to anon using (id = 1);
