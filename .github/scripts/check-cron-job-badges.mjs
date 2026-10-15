@@ -103,6 +103,9 @@ export function updateBody(body, cycle, cells) {
     const hours = (Date.parse(`${cycle.replace(' ', 'T')}:00-04:00`) - Date.parse(previous)) / 3_600_000;
     if (hours > 6) gapCount = Math.round(hours / 6) - 1;
     if (hours < 0) gapCount = -1;
+  } else if (cycle > firstCycle) {
+    const hours = (Date.parse(`${cycle.replace(' ', 'T')}:00-04:00`) - Date.parse(`${firstCycle.replace(' ', 'T')}:00-04:00`)) / 3_600_000;
+    gapCount = Math.round(hours / 6);
   }
   const anomaly = cells.some(({ ok }) => !ok) || gapCount !== 0;
   const monitor = gapCount > 0 ? `❌ missed ${gapCount} monitor cycle(s)`
