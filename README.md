@@ -38,7 +38,7 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
    ```
 
 4. For deployment, create a Render Blueprint from [`render.yaml`](render.yaml). Set the Supabase values and `BASE_URL` and `CLIENT_URL` to the public HTTPS origin. Render generates `SESSION_SECRET`.
-5. To enable email, configure `RESEND_API_KEY` and `SMTP_FROM` for a verified sender. See the [operations guide](docs/operations.md) for production checks and database safety.
+5. To enable email, configure `RESEND_API_KEY` and `SMTP_FROM` for a verified sender.
 
 ## Feature backlog
 
