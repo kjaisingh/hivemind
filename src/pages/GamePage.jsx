@@ -197,12 +197,17 @@ export default function GamePage() {
       return undefined;
     }
     let active = true;
+    let inFlight = false;
     const loadProgress = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const data = await api(`/api/games/${gameId}/rounds/${roundId}/progress`);
         if (active) setProgress(data);
       } catch {
         if (active) setProgress(null);
+      } finally {
+        inFlight = false;
       }
     };
     void loadProgress();
