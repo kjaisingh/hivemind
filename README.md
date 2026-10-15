@@ -20,7 +20,7 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
 
 ## Setup
 
-1. Install Node.js 22 or newer and create a Supabase project. Run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor.
+1. Install Node.js 22 or newer and create a Supabase project. Run [`supabase/schema.sql`](supabase/schema.sql) and then [`supabase/keepalive.sql`](supabase/keepalive.sql) in its SQL Editor.
 2. Copy the environment template, then set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a random `SESSION_SECRET` in `.env`.
 
    ```bash
@@ -39,6 +39,14 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
 
 4. For deployment, create a Render Blueprint from [`render.yaml`](render.yaml). Set the Supabase values and `BASE_URL` and `CLIENT_URL` to the public HTTPS origin. Render generates `SESSION_SECRET`.
 5. To enable email, configure `RESEND_API_KEY` and `SMTP_FROM` for a verified sender.
+
+## Supabase keepalive
+
+Run [`supabase/keepalive.sql`](supabase/keepalive.sql) after the application schema. It creates a fixed, non-sensitive row with an anonymous read policy limited to that row.
+
+The enabled [cron-job.org](https://console.cron-job.org/jobs) job `Hivemind Supabase keepalive (plqojpcrjnzsoejcrczx)` sends a GET request to `https://plqojpcrjnzsoejcrczx.supabase.co/rest/v1/keepalive?select=id&limit=1` every six hours in `America/New_York` (`5 */6 * * *`). Set its `apikey` header to this project's Supabase publishable key. Save responses and enable failure, recovery, and disabled-job notifications. A test run should return HTTP 200 with `[{"id":1}]`.
+
+This request reaches Supabase directly, even when the Render service is asleep. Monitor failed runs; free-tier activity does not guarantee uninterrupted availability.
 
 ## Feature backlog
 

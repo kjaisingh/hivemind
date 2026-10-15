@@ -32,14 +32,6 @@ export const emailLimiter = rateLimit({
   message: { message: 'Too many emails sent. Please try again later.' },
 });
 
-export const keepaliveLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many keepalive requests. Please try again later.' },
-});
-
 export const pageLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
