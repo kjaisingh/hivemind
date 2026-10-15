@@ -1,0 +1,43 @@
+name: Supabase keepalive monitor
+
+on:
+  schedule:
+    - cron: '45 4,10,16,22 * * *'
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Read badges without checking the six-hour schedule
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: supabase-keepalive-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - name: Check cron-job.org status badges
+        env:
+          CRON_BADGE_JEOPARDY: ${{ secrets.CRON_BADGE_JEOPARDY }}
+          CRON_BADGE_HIVEMIND: ${{ secrets.CRON_BADGE_HIVEMIND }}
+          CRON_BADGE_TRIGGER: ${{ secrets.CRON_BADGE_TRIGGER }}
+          CRON_BADGE_ATLANTIS: ${{ secrets.CRON_BADGE_ATLANTIS }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [[ '${{ inputs.baseline }}' == 'true' ]]; then
+            node .github/scripts/check-cron-job-badges.mjs --baseline
+          else
+            node .github/scripts/check-cron-job-badges.mjs
+          fi
