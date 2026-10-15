@@ -38,7 +38,7 @@ export async function scoreRound(supabase, roundId) {
 
     if (stats.length > 0) {
       unwrap(
-        await supabase.from('QuestionAnswerStat').insert(
+        await supabase.from('QuestionAnswerStat').upsert(
           stats.map((item) => ({
             questionId: question.id,
             normalizedAnswer: item.normalizedAnswer,
@@ -46,6 +46,7 @@ export async function scoreRound(supabase, roundId) {
             count: item.count,
             percentage: totalResponses > 0 ? (item.count / totalResponses) * 100 : 0,
           })),
+          { onConflict: 'questionId,normalizedAnswer' },
         ),
       );
     }
@@ -62,6 +63,6 @@ export async function scoreRound(supabase, roundId) {
   const rows = buildScoreRows(roundId, totals);
 
   if (rows.length > 0) {
-    unwrap(await supabase.from('RoundScore').insert(rows));
+    unwrap(await supabase.from('RoundScore').upsert(rows, { onConflict: 'roundId,userId' }));
   }
 }

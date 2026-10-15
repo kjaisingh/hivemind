@@ -76,23 +76,30 @@ async function runProcessRounds(supabase) {
   const roundsToClose = await getRoundsForClosing(supabase, now);
 
   for (const round of roundsToClose) {
-    await scoreRound(supabase, round.id);
-    unwrap(await supabase.from('Round').update({ status: 'CLOSED' }).eq('id', round.id));
+    try {
+      await scoreRound(supabase, round.id);
+      const closed = unwrap(
+        await supabase.from('Round').update({ status: 'CLOSED' }).eq('id', round.id).eq('status', 'ACTIVE').select('id').maybeSingle(),
+      );
+      if (!closed) continue;
 
-    if (emailConfigured && round.game.emailSettings?.autoResultsLive) {
-      for (const membership of round.game.memberships) {
-        const dedupeKey = `results-live:${round.id}:${membership.user.id}`;
-        await sendWithDedup(supabase, {
-          dedupeKey,
-          gameId: round.gameId,
-          roundId: round.id,
-          recipient: membership.user,
-          emailType: 'RESULTS_LIVE',
-          subject: `${round.game.name}: ${round.name} results are live`,
-          intro: 'Your scores are ready. Rally your confidence and check who guessed the crowd best.',
-          gameName: round.game.name,
-        });
+      if (emailConfigured && round.game.emailSettings?.autoResultsLive) {
+        for (const membership of round.game.memberships) {
+          const dedupeKey = `results-live:${round.id}:${membership.user.id}`;
+          await sendWithDedup(supabase, {
+            dedupeKey,
+            gameId: round.gameId,
+            roundId: round.id,
+            recipient: membership.user,
+            emailType: 'RESULTS_LIVE',
+            subject: `${round.game.name}: ${round.name} results are live`,
+            intro: 'Your scores are ready. Rally your confidence and check who guessed the crowd best.',
+            gameName: round.game.name,
+          });
+        }
       }
+    } catch (error) {
+      console.error('[scheduler] Round close failed.', { roundId: round.id, error });
     }
   }
 

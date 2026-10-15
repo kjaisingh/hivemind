@@ -3,25 +3,47 @@ import { Link, useParams } from 'react-router-dom';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../lib/api';
 import { useAuth } from '../context/auth';
+import { buildAnswerSummaryCsv } from '../lib/resultsCsv';
 
 export default function RoundResultsPage() {
   const { gameId, roundId } = useParams();
   const { user } = useAuth();
-  const [round, setRound] = useState(null);
-  const [error, setError] = useState('');
+  const routeKey = `${gameId}/${roundId}`;
+  const [result, setResult] = useState({ routeKey: '', round: null, error: '' });
+  const round = result.routeKey === routeKey ? result.round : null;
+  const error = result.routeKey === routeKey ? result.error : '';
   const [isDark, setIsDark] = useState(() => document.documentElement.getAttribute('data-theme') === 'dark');
 
   useEffect(() => {
+    let active = true;
+    setResult({ routeKey, round: null, error: '' });
     api(`/api/games/${gameId}/rounds/${roundId}/results`)
-      .then((data) => setRound(data.round))
-      .catch((loadError) => setError(loadError.message));
-  }, [gameId, roundId]);
+      .then((data) => {
+        if (active) setResult({ routeKey, round: data.round, error: '' });
+      })
+      .catch((loadError) => {
+        if (active) setResult({ routeKey, round: null, error: loadError.message });
+      });
+    return () => { active = false; };
+  }, [gameId, roundId, routeKey]);
 
   useEffect(() => {
     const handleThemeChange = (event) => setIsDark(event.detail === 'dark');
     window.addEventListener('hivemind-theme-change', handleThemeChange);
     return () => window.removeEventListener('hivemind-theme-change', handleThemeChange);
   }, []);
+
+  function downloadAnswers() {
+    const csv = buildAnswerSummaryCsv(round.questions);
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `hivemind-${round.id}-answers.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 
   if (error) {
     return (
@@ -49,7 +71,10 @@ export default function RoundResultsPage() {
           </p>
           <p className="small">Round rank: #{round.ownScore.rank}</p>
         </div>
-        <Link className="button button-secondary" to={`/games/${gameId}`}>Back to game</Link>
+        <div className="row">
+          <button className="button button-secondary" type="button" onClick={downloadAnswers}>Download answer summary</button>
+          <Link className="button button-secondary" to={`/games/${gameId}`}>Back to game</Link>
+        </div>
       </header>
 
       <section className="card">
