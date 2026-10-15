@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       baseline:
-        description: Read badges without checking the six-hour schedule
+        description: Read the badge without checking the six-hour schedule
         type: boolean
         default: false
 
@@ -28,16 +28,19 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
-      - name: Check cron-job.org status badges
+      - name: Test badge checker
+        run: node --test .github/scripts/check-cron-job-badge.test.mjs
+      - name: Check cron-job.org status badge
         env:
-          CRON_BADGE_JEOPARDY: ${{ secrets.CRON_BADGE_JEOPARDY }}
-          CRON_BADGE_HIVEMIND: ${{ secrets.CRON_BADGE_HIVEMIND }}
-          CRON_BADGE_TRIGGER: ${{ secrets.CRON_BADGE_TRIGGER }}
-          CRON_BADGE_ATLANTIS: ${{ secrets.CRON_BADGE_ATLANTIS }}
+          JOB_NAME: Hivemind
+          CRON_JOB_ID: '8653486'
+          CRON_JOB_MINUTE: '5'
+          KEEPALIVE_ISSUE_NUMBER: '20'
+          CRON_JOB_BADGE_URL: ${{ secrets.CRON_JOB_BADGE_URL }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [[ '${{ inputs.baseline }}' == 'true' ]]; then
-            node .github/scripts/check-cron-job-badges.mjs --baseline
+            node .github/scripts/check-cron-job-badge.mjs --baseline
           else
-            node .github/scripts/check-cron-job-badges.mjs
+            node .github/scripts/check-cron-job-badge.mjs
           fi
