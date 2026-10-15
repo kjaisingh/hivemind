@@ -39,3 +39,10 @@ export const keepaliveLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many keepalive requests. Please try again later.' },
 });
+
+export const pageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});

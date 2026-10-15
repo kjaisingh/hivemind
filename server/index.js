@@ -6,7 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { supabase } from './db.js';
 import { createKeepaliveProbe } from './keepalive.js';
-import { keepaliveLimiter } from './limiters.js';
+import { keepaliveLimiter, pageLimiter } from './limiters.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
 import { startRoundScheduler } from './roundScheduler.js';
 import authRoutes from './routes/auth.js';
@@ -96,7 +96,7 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ message: 'Not found.' });
 });
 
-app.get('/{*path}', (_req, res) => {
+app.get('/{*path}', pageLimiter, (_req, res) => {
   res.sendFile(path.join(root, 'dist', 'index.html'));
 });
 
