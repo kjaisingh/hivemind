@@ -16,7 +16,7 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
 - React and Vite provide the client; Express handles authentication, game rules, and API requests.
 - Supabase Postgres stores users, games, rounds, answers, and results.
 - An in-process scheduler closes rounds and handles reminders. One Render service serves the client and API.
-- Resend provides optional email delivery. Health and keepalive endpoints support deployment checks.
+- Resend provides optional email delivery.
 
 ## Setup
 
