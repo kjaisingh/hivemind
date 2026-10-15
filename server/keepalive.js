@@ -20,13 +20,13 @@ export function createKeepaliveProbe(
     }
 
     lastSuccessAt = now();
-    return { cached: false };
+    return { cached: false, checkedAt: new Date(lastSuccessAt).toISOString() };
   }
 
   return async function runKeepalive() {
     const currentTime = now();
     if (lastSuccessAt !== null && currentTime - lastSuccessAt < cooldownMs) {
-      return { cached: true };
+      return { cached: true, checkedAt: new Date(lastSuccessAt).toISOString() };
     }
 
     if (!inFlight) {

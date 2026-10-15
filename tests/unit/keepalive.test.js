@@ -32,13 +32,13 @@ test('keepalive performs three fixed reads and caches successful probes', async 
     now: () => currentTime,
   });
 
-  assert.deepEqual(await probe(), { cached: false });
-  assert.deepEqual(await probe(), { cached: true });
+  assert.deepEqual(await probe(), { cached: false, checkedAt: new Date(1_000).toISOString() });
+  assert.deepEqual(await probe(), { cached: true, checkedAt: new Date(1_000).toISOString() });
   assert.equal(supabase.calls.length, 3);
   assert.deepEqual(supabase.calls[0], { table: 'User', columns: 'id', value: 1 });
 
   currentTime += 500;
-  assert.deepEqual(await probe(), { cached: false });
+  assert.deepEqual(await probe(), { cached: false, checkedAt: new Date(1_500).toISOString() });
   assert.equal(supabase.calls.length, 6);
 });
 
@@ -48,15 +48,15 @@ test('keepalive coalesces concurrent probes', async () => {
     releaseFirstQuery = resolve;
   });
   const supabase = createSupabaseMock([firstQuery]);
-  const probe = createKeepaliveProbe(supabase.client);
+  const probe = createKeepaliveProbe(supabase.client, { now: () => 2_000 });
 
   const firstProbe = probe();
   const secondProbe = probe();
   releaseFirstQuery({ data: [], error: null });
 
   assert.deepEqual(await Promise.all([firstProbe, secondProbe]), [
-    { cached: false },
-    { cached: false },
+    { cached: false, checkedAt: new Date(2_000).toISOString() },
+    { cached: false, checkedAt: new Date(2_000).toISOString() },
   ]);
   assert.equal(supabase.calls.length, 3);
 });
@@ -65,9 +65,9 @@ test('keepalive failures are not cached and database data is never returned', as
   const supabase = createSupabaseMock([
     { data: null, error: { message: 'database unavailable', code: 'PGRST000' } },
   ]);
-  const probe = createKeepaliveProbe(supabase.client);
+  const probe = createKeepaliveProbe(supabase.client, { now: () => 3_000 });
 
   await assert.rejects(probe(), { message: 'database unavailable', code: 'PGRST000' });
-  assert.deepEqual(await probe(), { cached: false });
+  assert.deepEqual(await probe(), { cached: false, checkedAt: new Date(3_000).toISOString() });
   assert.equal(supabase.calls.length, 4);
 });

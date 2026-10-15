@@ -56,8 +56,8 @@ app.get('/api/keepalive', keepaliveLimiter, async (_req, res) => {
   res.set('Cache-Control', 'no-store');
 
   try {
-    const { cached } = await runKeepalive();
-    res.status(200).json({ status: 'ok', database: 'reachable', cached });
+    const { cached, checkedAt } = await runKeepalive();
+    res.status(200).json({ status: 'ok', database: 'reachable', cached, checkedAt });
   } catch (error) {
     console.error('[keepalive]', error);
     res.status(503).json({ status: 'unavailable', database: 'unreachable' });
@@ -82,14 +82,26 @@ app.use('/api', roundsRoutes);
 app.use('/api', suggestionsRoutes);
 app.use('/api', emailRoutes);
 
+// Vite fingerprints bundled assets, so only those files can be cached indefinitely.
+app.use('/assets', express.static(path.join(root, 'dist', 'assets'), {
+  immutable: true,
+  maxAge: '1y',
+}));
+app.use('/assets', (_req, res) => {
+  res.status(404).end();
+});
 app.use(express.static(path.join(root, 'dist')));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ message: 'Not found.' });
 });
 
-app.use((_req, res) => {
+app.get('/{*path}', (_req, res) => {
   res.sendFile(path.join(root, 'dist', 'index.html'));
+});
+
+app.use((_req, res) => {
+  res.status(404).end();
 });
 
 app.use((error, _req, res, _next) => {
