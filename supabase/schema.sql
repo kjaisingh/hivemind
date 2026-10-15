@@ -124,6 +124,23 @@ create table if not exists public."QuestionAnswerStat" (
 );
 
 create index if not exists "QuestionAnswerStat_questionId_idx" on public."QuestionAnswerStat" ("questionId");
+
+do $$
+begin
+  if exists (
+    select 1
+    from public."QuestionAnswerStat"
+    group by "questionId", "normalizedAnswer"
+    having count(*) > 1
+  ) then
+    raise exception using
+      errcode = '23505',
+      message = 'QuestionAnswerStat contains duplicate questionId/normalizedAnswer rows',
+      hint = 'Run supabase/repair-question-answer-stat-duplicates.sql, then rerun this schema.';
+  end if;
+end
+$$;
+
 create unique index if not exists "QuestionAnswerStat_questionId_normalizedAnswer_idx"
   on public."QuestionAnswerStat" ("questionId", "normalizedAnswer");
 
