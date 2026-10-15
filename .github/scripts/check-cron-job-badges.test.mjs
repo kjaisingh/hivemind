@@ -40,4 +40,7 @@ test('tracking issue detects missed monitor cycles and replaces reruns', () => {
   assert.equal(gap.gapCount, 1);
   assert.equal(gap.anomaly, true);
   assert.match(gap.nextBody, /missed 1 monitor cycle/);
+  const missedFirst = updateBody(issue, '2026-10-16 00:00', good);
+  assert.equal(missedFirst.gapCount, 1);
+  assert.equal(missedFirst.anomaly, true);
 });
