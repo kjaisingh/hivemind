@@ -1,26 +1,49 @@
 # Hivemind
 
-Hivemind is a multiplayer guessing game: answer as you think your group will answer, then see how many minds matched yours.
+Hivemind is a multiplayer guessing game. Answer as you think your group will answer, then see whose answers match and how you rank across a season. [Play Hivemind](https://hivemind-ev7a.onrender.com).
 
-[Play Hivemind](https://hivemind-ev7a.onrender.com)
+## Features
 
-## How to play
+- Create or join a game with a code, invite link, or QR code.
+- Play scheduled rounds with free-text and multiple-choice questions; revise answers until a round closes.
+- Suggest questions, or host a game by drafting, editing, and publishing rounds.
+- Earn points for matching answers and follow round results, medals, and the season leaderboard.
+- Explore answer counts and charts, and download aggregate results as CSV.
+- Send optional email announcements and reminders; use the mobile-friendly light or dark interface.
 
-1. Create an account, then create a game or join one with a code, invite link, or QR code.
-2. Answer each round's free-text and multiple-choice questions before the deadline. You can revise your answers while the round is open.
-3. Once the round closes, compare answers, see your points and rank, and follow the season leaderboard.
+## Architecture
 
-## For players and hosts
+- React and Vite provide the client; Express handles authentication, game rules, and API requests.
+- Supabase Postgres stores users, games, rounds, answers, and results.
+- An in-process scheduler closes rounds and handles reminders. One Render service serves the client and API.
+- Resend provides optional email delivery. Health and keepalive endpoints support deployment checks.
 
-- Players can suggest questions for a future round and see which active games still need their answers.
-- Hosts can create and edit draft rounds, choose questions and deadlines, publish rounds, and review player suggestions.
-- Invite links, short codes, and QR codes make it easy to bring a group together.
-- Results show answer counts and percentages, with charts and accessible text summaries. You can download a round's answer totals as CSV; the file contains no individual player answers.
-- Optional email announcements and reminders are available when email delivery is enabled.
-- The interface works on desktop and mobile, with light and dark themes.
+## Setup
 
-## Scoring and visibility
+1. Install Node.js 22 or newer and create a Supabase project. Run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor.
+2. Copy the environment template, then set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a random `SESSION_SECRET` in `.env`.
 
-Each answer earns one point for every player who gave the same normalized answer, including you. Matching ignores case, punctuation, repeated spaces, and simple plurals. Round points accumulate on the season leaderboard. Players tied for first on a round earn a medal if their score is above zero.
+   ```bash
+   cp .env.example .env
+   ```
 
-While a round is open, players see only how many people have submitted, not anyone else's answers. Answers and results become visible after the round closes.
+3. Install dependencies and start the app at <http://localhost:5183>.
+
+   ```bash
+   npm ci
+   ```
+
+   ```bash
+   npm run dev
+   ```
+
+4. For deployment, create a Render Blueprint from [`render.yaml`](render.yaml). Set the Supabase values and `BASE_URL` and `CLIENT_URL` to the public HTTPS origin. Render generates `SESSION_SECRET`.
+5. To enable email, configure `RESEND_API_KEY` and `SMTP_FROM` for a verified sender.
+
+## Feature backlog
+
+- Add live round updates without refreshing the page.
+- Add reusable question packs and bulk question import.
+- Let hosts assign co-hosts with limited permissions.
+- Add optional device notifications for round openings and deadlines.
+- Move scheduling outside the web process and add automated backups and failure alerts.
