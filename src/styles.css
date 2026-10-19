@@ -81,8 +81,7 @@
 
 body {
   margin: 0;
-  background: linear-gradient(160deg, var(--color-primary-tint) 0%, var(--color-bg) 32%, var(--color-bg) 68%, var(--color-accent-tint) 100%)
-    fixed;
+  background: var(--color-bg);
   color: var(--color-ink);
   line-height: var(--line-height-normal);
   min-height: 100vh;
@@ -127,23 +126,45 @@ h3 {
 }
 
 .hero {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 45%, var(--color-accent-dark) 100%);
-  border: 1px solid var(--color-primary-deep);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-2xl);
   padding: var(--space-28);
   display: grid;
   gap: var(--space-12);
-  color: #fff;
-  box-shadow: var(--shadow-md);
+  color: var(--color-ink);
 }
 
 .hero h1 {
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  color: #fff;
+  max-width: 16ch;
+  font-size: clamp(2.4rem, 4.2vw, 3.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+  color: var(--color-ink);
 }
 
 .hero p {
-  color: var(--color-primary-tint);
+  color: var(--color-muted);
+}
+
+.hero-copy {
+  display: grid;
+  align-content: center;
+  gap: var(--space-20);
+}
+
+.hero-copy > p {
+  max-width: 48ch;
+}
+
+.hero .badge {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-link);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .hero-actions {
@@ -153,21 +174,22 @@ h3 {
 }
 
 .hero-actions .button {
-  background: #fff;
-  color: var(--color-primary-dark);
-}
-
-.hero-actions .button:hover:not(:disabled) {
-  background: var(--color-primary-tint);
-}
-
-.hero-actions .button-secondary {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--color-primary-deep);
   color: #fff;
 }
 
+.hero-actions .button:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.hero-actions .button-secondary {
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-ink);
+}
+
 .hero-actions .button-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.26);
+  background: var(--color-surface-tint);
 }
 
 .info-card {
@@ -652,37 +674,53 @@ html {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
   align-items: center;
+  gap: var(--space-40);
 }
 
 .hero-preview {
   display: grid;
   gap: var(--space-10);
-  padding: var(--space-18);
+  padding: var(--space-24);
   color: var(--color-ink);
-  background: var(--color-surface);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
-  transform: rotate(1deg);
 }
 
-.hero .hero-preview .small {
+.preview-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
   color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hero .preview-caption,
+.hero .preview-footer {
+  color: var(--color-muted);
+  font-size: 0.84rem;
+}
+
+.hero .preview-footer {
+  padding-top: var(--space-6);
 }
 
 .preview-answer {
   padding: var(--space-10) var(--space-12);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-tint);
+  background: var(--color-surface);
 }
 
 .preview-answer-active {
   border-color: var(--color-primary);
-  background: var(--color-primary-tint);
-  color: var(--color-primary-deep);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-ink);
   font-weight: 700;
 }
 
@@ -695,6 +733,10 @@ html {
 .feature-heading {
   grid-column: 1 / -1;
   max-width: 620px;
+}
+
+.feature-grid .info-card {
+  box-shadow: none;
 }
 
 .feature-number {

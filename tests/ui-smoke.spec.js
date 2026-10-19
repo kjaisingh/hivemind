@@ -8,8 +8,9 @@ test.beforeEach(async ({ page }) => {
 
 test('landing and authentication remain usable without horizontal overflow', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Find the group's answer/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Start a game' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'How well do you know your group?' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Create or join a game' })).toBeVisible();
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toBe('none');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await page.goto('/auth');
