@@ -447,7 +447,7 @@ textarea {
 }
 
 .tab-active {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent-dark));
+  background: var(--color-primary-deep);
   color: var(--color-on-primary);
   border-color: transparent;
 }
