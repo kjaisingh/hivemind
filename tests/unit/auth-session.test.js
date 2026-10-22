@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import test from 'node:test';
 import express from 'express';
-import session from 'express-session';
 import bcrypt from 'bcryptjs';
 import { mockDatabase } from '../mockDatabase.js';
 
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+process.env.SESSION_SECRET = 'test-only-secret';
 const { supabase } = await import('../../server/db.js');
-const { passport, configurePassport } = await import('../../server/auth.js');
+const { passport, configurePassport, createSessionMiddleware } = await import('../../server/auth.js');
 const { default: authRoutes } = await import('../../server/routes/auth.js');
 
 for (const action of ['login', 'signup']) {
@@ -20,7 +20,7 @@ for (const action of ['login', 'signup']) {
     configurePassport(supabase);
     const app = express();
     app.use(express.json());
-    app.use(session({ secret: 'test-only-secret', resave: false, saveUninitialized: false }));
+    app.use(createSessionMiddleware());
     app.use(passport.initialize());
     app.use(passport.session());
     app.use('/api', authRoutes);
