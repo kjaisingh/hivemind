@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import { passport } from '../auth.js';
 import { isUniqueViolation, supabase, unwrap } from '../db.js';
-import { claimPendingInvite, ensureMembership } from '../helpers.js';
+import { ensureMembership } from '../helpers.js';
 import { joinLimiter, loginLimiter, signupLimiter } from '../limiters.js';
 import { loginSchema, signUpSchema, validationMessage } from '../validation.js';
 
@@ -49,21 +49,17 @@ router.post('/auth/signup', signupLimiter, async (req, res) => {
     throw error;
   }
 
+  const pendingInviteToken = req.session.pendingInviteToken;
   req.login(user, (error) => {
     if (error) {
       return res.status(500).json({ message: 'Failed to login.' });
     }
 
-    claimPendingInvite(req, user.id)
-      .then(({ inviteToken }) => {
-        res.json({
-          user: { id: user.id, email: user.email, username: user.username },
-          pendingInviteToken: inviteToken || null,
-        });
-      })
-      .catch(() => {
-        res.status(500).json({ message: 'Failed to complete sign up.' });
-      });
+    req.session.pendingInviteToken = pendingInviteToken;
+    res.json({
+      user: { id: user.id, email: user.email, username: user.username },
+      pendingInviteToken: pendingInviteToken || null,
+    });
   });
 });
 
@@ -75,25 +71,22 @@ router.post('/auth/login', loginLimiter, (req, res, next) => {
   req.body = parsed.data;
 
   passport.authenticate('local', (error, user) => {
-    if (error || !user) {
+    if (error) return next(error);
+    if (!user) {
       return res.status(400).json({ message: 'Invalid credentials.' });
     }
 
+    const pendingInviteToken = req.session.pendingInviteToken;
     req.login(user, (loginError) => {
       if (loginError) {
         return res.status(500).json({ message: 'Login failed.' });
       }
 
-      claimPendingInvite(req, user.id)
-        .then(({ inviteToken }) => {
-          res.json({
-            user: { id: user.id, email: user.email, username: user.username },
-            pendingInviteToken: inviteToken || null,
-          });
-        })
-        .catch(() => {
-          res.status(500).json({ message: 'Failed to complete login.' });
-        });
+      req.session.pendingInviteToken = pendingInviteToken;
+      res.json({
+        user: { id: user.id, email: user.email, username: user.username },
+        pendingInviteToken: pendingInviteToken || null,
+      });
     });
   })(req, res, next);
 });
@@ -127,6 +120,7 @@ router.get('/join/:inviteToken', joinLimiter, async (req, res) => {
   }
 
   await ensureMembership(game.id, req.user.id);
+  req.session.pendingInviteToken = null;
   return res.json({ requiresAuth: false, gameId: game.id });
 });
 

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 export function mockDatabase(tables) {
   return {
     from(table) {
@@ -9,6 +11,8 @@ export function mockDatabase(tables) {
       let start = 0;
       let end = Infinity;
       let single = false;
+      let conflictKeys = [];
+      let ignoreDuplicates = false;
       const query = {
         select() { return this; },
         eq(key, value) { filters.push((row) => row[key] === value); return this; },
@@ -24,6 +28,13 @@ export function mockDatabase(tables) {
         update(data) { action = 'update'; values = data; return this; },
         delete() { action = 'delete'; return this; },
         insert(data) { action = 'insert'; values = Array.isArray(data) ? data : [data]; return this; },
+        upsert(data, options) {
+          action = 'upsert';
+          values = Array.isArray(data) ? data : [data];
+          conflictKeys = options.onConflict.split(',');
+          ignoreDuplicates = options.ignoreDuplicates;
+          return this;
+        },
         then(resolve, reject) {
           let rows = tables[table].filter((row) => filters.every((filter) => filter(row)));
           if (action === 'update') rows.forEach((row) => Object.assign(row, values));
@@ -32,8 +43,20 @@ export function mockDatabase(tables) {
             if (table === 'EmailDeliveryLog' && values.some((value) => tables[table].some((row) => row.dedupeKey === value.dedupeKey))) {
               return Promise.resolve({ data: null, error: { code: '23505' } }).then(resolve, reject);
             }
-            rows = values;
-            tables[table].push(...values);
+            rows = values.map((value) => ({ id: randomUUID(), ...value }));
+            tables[table].push(...rows);
+          }
+          if (action === 'upsert') {
+            rows = values.map((value) => {
+              const existing = tables[table].find((row) => conflictKeys.every((key) => row[key] === value[key]));
+              if (existing) {
+                if (!ignoreDuplicates) Object.assign(existing, value);
+                return existing;
+              }
+              const row = { id: randomUUID(), ...value };
+              tables[table].push(row);
+              return row;
+            });
           }
           rows.sort((a, b) => {
             for (const { key, ascending } of orders) {

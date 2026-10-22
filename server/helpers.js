@@ -22,18 +22,3 @@ export async function getRole(gameId, userId) {
   );
   return membership?.role;
 }
-
-export async function claimPendingInvite(req, userId) {
-  const inviteToken = req.session.pendingInviteToken;
-  if (!inviteToken) {
-    return { inviteToken: null, game: null };
-  }
-
-  const game = unwrap(await supabase.from('Game').select('*').eq('inviteToken', inviteToken).maybeSingle());
-  if (game) {
-    await ensureMembership(game.id, userId);
-  }
-  req.session.pendingInviteToken = null;
-
-  return { inviteToken, game };
-}
