@@ -161,38 +161,6 @@ export async function getRoundResults(supabase, roundId, gameId, userId) {
   };
 }
 
-export async function getRoundScoringData(supabase, roundId) {
-  const round = unwrap(await supabase.from('Round').select('*').eq('id', roundId).maybeSingle());
-  if (!round) {
-    return null;
-  }
-
-  const memberships = await readAll(supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
-  const userIds = memberships.map((membership) => membership.userId);
-  const players = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,username').in('id', ids)) : [];
-
-  const questions = await readAll(supabase.from('Question').select('*').eq('roundId', roundId).order('position', { ascending: true }));
-  const questionIds = questions.map((question) => question.id);
-  const submissions = questionIds.length
-    ? await readByIds(questionIds, (ids) => supabase.from('Submission').select('*').in('questionId', ids))
-    : [];
-  const submissionsByQuestion = new Map();
-  for (const submission of submissions) {
-    const list = submissionsByQuestion.get(submission.questionId) || [];
-    list.push(submission);
-    submissionsByQuestion.set(submission.questionId, list);
-  }
-
-  return {
-    round,
-    players,
-    questions: questions.map((question) => ({
-      ...question,
-      submissions: submissionsByQuestion.get(question.id) || [],
-    })),
-  };
-}
-
 async function attachGameContext(supabase, rounds, { withQuestions = false } = {}) {
   if (rounds.length === 0) {
     return [];

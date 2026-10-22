@@ -98,7 +98,7 @@ app.use((error, _req, res, _next) => {
     return res.status(400).json({ message: 'Request body must be valid JSON.' });
   }
   console.error('[server]', error);
-  res.status(error.status || 500).json({ message: 'Something went wrong. Please try again.' });
+  res.status(error.status || 500).json({ message: error.expose ? error.message : 'Something went wrong. Please try again.' });
 });
 
 let schedulerTimer;

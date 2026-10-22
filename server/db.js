@@ -20,6 +20,10 @@ export function unwrap({ data, error }) {
     databaseError.code = error.code;
     databaseError.details = error.details;
     databaseError.hint = error.hint;
+    if (/^PT4\d{2}$/.test(error.code)) {
+      databaseError.status = Number(error.code.slice(2));
+      databaseError.expose = true;
+    }
     throw databaseError;
   }
   return data;

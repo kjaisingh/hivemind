@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import dayjs from 'dayjs';
-import { isUniqueViolation, supabase, readAll, readByIds, unwrap } from '../db.js';
+import { supabase, readAll, readByIds, unwrap } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { getRoundResults } from '../repository.js';
 import { processRounds, sendWithDedup } from '../roundScheduler.js';
@@ -72,141 +72,32 @@ router.post('/games/:gameId/active-round/save', requireAuth, async (req, res) =>
     });
   }
 
-  if (savedRows.length > 0) {
-    unwrap(await supabase.from('Submission').upsert(savedRows, { onConflict: 'questionId,userId' }));
-  }
-  if (clearedQuestionIds.length > 0) {
-    unwrap(
-      await supabase
-        .from('Submission')
-        .delete()
-        .eq('userId', req.user.id)
-        .in('questionId', clearedQuestionIds),
-    );
-  }
+  unwrap(await supabase.rpc('save_round_answers', {
+    p_round_id: round.id,
+    p_user_id: req.user.id,
+    p_answers: [...savedRows, ...clearedQuestionIds.map((questionId) => ({ questionId, rawAnswer: '', normalizedAnswer: '' }))],
+  }));
 
   res.json({ ok: true, savedCount: savedRows.length, deletedCount: clearedQuestionIds.length });
 });
 
-router.post('/games/:gameId/rounds', requireAuth, async (req, res) => {
+async function saveDraft(req, res) {
   const role = await getRole(req.params.gameId, req.user.id);
-  if (role !== 'ADMIN') {
-    return res.status(403).json({ message: 'Admin only.' });
-  }
-
+  if (role !== 'ADMIN') return res.status(403).json({ message: 'Admin only.' });
   const parsed = roundSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: validationMessage(parsed, 'Invalid round data.') });
-  }
+  if (!parsed.success) return res.status(400).json({ message: validationMessage(parsed, 'Invalid round data.') });
+  const { questions, ...details } = parsed.data;
+  const roundId = unwrap(await supabase.rpc('save_draft_round', {
+    p_game_id: req.params.gameId,
+    p_round_id: req.params.roundId || null,
+    p_details: details,
+    p_questions: questions,
+  }));
+  res.json({ roundId });
+}
 
-  const round = unwrap(
-    await supabase
-      .from('Round')
-      .insert({
-        gameId: req.params.gameId,
-        name: parsed.data.name,
-        description: parsed.data.description,
-        startsAt: new Date(parsed.data.startsAt).toISOString(),
-        expiresAt: new Date(parsed.data.expiresAt).toISOString(),
-        status: 'DRAFT',
-      })
-      .select()
-      .single(),
-  );
-
-  try {
-    unwrap(
-      await supabase.from('Question').insert(
-        parsed.data.questions.map((question, index) => ({
-          roundId: round.id,
-          prompt: question.prompt,
-          type: question.type,
-          choices: question.type === 'MULTIPLE_CHOICE' ? question.choices : null,
-          position: index + 1,
-        })),
-      ),
-    );
-  } catch (error) {
-    await supabase.from('Round').delete().eq('id', round.id);
-    throw error;
-  }
-
-  res.json({ roundId: round.id });
-});
-
-router.put('/games/:gameId/rounds/:roundId', requireAuth, async (req, res) => {
-  const role = await getRole(req.params.gameId, req.user.id);
-  if (role !== 'ADMIN') {
-    return res.status(403).json({ message: 'Admin only.' });
-  }
-
-  const parsed = roundSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: validationMessage(parsed, 'Invalid round data.') });
-  }
-
-  const existing = unwrap(
-    await supabase
-      .from('Round')
-      .select('*')
-      .eq('id', req.params.roundId)
-      .eq('gameId', req.params.gameId)
-      .maybeSingle(),
-  );
-  if (!existing) {
-    return res.status(404).json({ message: 'Round not found.' });
-  }
-  if (existing.status !== 'DRAFT') {
-    return res.status(400).json({ message: 'Only draft rounds can be edited.' });
-  }
-
-  const previousQuestions = await readAll(supabase.from('Question').select('*').eq('roundId', existing.id).order('position', { ascending: true }));
-
-  const round = unwrap(
-    await supabase
-      .from('Round')
-      .update({
-        name: parsed.data.name,
-        description: parsed.data.description,
-        startsAt: new Date(parsed.data.startsAt).toISOString(),
-        expiresAt: new Date(parsed.data.expiresAt).toISOString(),
-      })
-      .eq('id', req.params.roundId)
-      .select()
-      .single(),
-  );
-
-  try {
-    unwrap(await supabase.from('Question').delete().eq('roundId', round.id));
-    unwrap(
-      await supabase.from('Question').insert(
-        parsed.data.questions.map((question, index) => ({
-          roundId: round.id,
-          prompt: question.prompt,
-          type: question.type,
-          choices: question.type === 'MULTIPLE_CHOICE' ? question.choices : null,
-          position: index + 1,
-        })),
-      ),
-    );
-  } catch (error) {
-    await supabase
-      .from('Round')
-      .update({
-        name: existing.name,
-        description: existing.description,
-        startsAt: existing.startsAt,
-        expiresAt: existing.expiresAt,
-      })
-      .eq('id', existing.id);
-    if (previousQuestions.length > 0) {
-      await supabase.from('Question').insert(previousQuestions);
-    }
-    throw error;
-  }
-
-  res.json({ roundId: round.id });
-});
+router.post('/games/:gameId/rounds', requireAuth, saveDraft);
+router.put('/games/:gameId/rounds/:roundId', requireAuth, saveDraft);
 
 router.delete('/games/:gameId/rounds/:roundId', requireAuth, async (req, res) => {
   const role = await getRole(req.params.gameId, req.user.id);
@@ -257,68 +148,11 @@ router.post('/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, r
     return res.status(400).json({ message: validationMessage(parsed) });
   }
 
-  const existing = unwrap(
-    await supabase
-      .from('Round')
-      .select('*')
-      .eq('id', req.params.roundId)
-      .eq('gameId', req.params.gameId)
-      .maybeSingle(),
-  );
-  if (!existing) {
-    return res.status(404).json({ message: 'Round not found.' });
-  }
-  if (existing.status !== 'DRAFT') {
-    return res.status(409).json({ message: 'Only draft rounds can be published.' });
-  }
-
-  const now = new Date();
-  if (new Date(existing.startsAt) > now) {
-    return res.status(400).json({ message: 'Round cannot be published before its start time.' });
-  }
-  if (new Date(existing.expiresAt) <= now) {
-    return res.status(400).json({ message: 'Round expiry must be in the future.' });
-  }
-
-  const activeRound = unwrap(
-    await supabase
-      .from('Round')
-      .select('id')
-      .eq('gameId', req.params.gameId)
-      .eq('status', 'ACTIVE')
-      .neq('id', req.params.roundId)
-      .limit(1)
-      .maybeSingle(),
-  );
-  if (activeRound) {
-    return res.status(409).json({ message: 'Close the active round before publishing another.' });
-  }
-
-  let round;
-  try {
-    round = unwrap(
-      await supabase
-        .from('Round')
-        .update({
-          status: 'ACTIVE',
-          publishedAt: now.toISOString(),
-          announcementEmail: parsed.data.announcement,
-        })
-        .eq('id', req.params.roundId)
-        .eq('gameId', req.params.gameId)
-        .eq('status', 'DRAFT')
-        .select()
-        .maybeSingle(),
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return res.status(409).json({ message: 'Another round is already active.' });
-    }
-    throw error;
-  }
-  if (!round) {
-    return res.status(409).json({ message: 'Round is no longer a draft.' });
-  }
+  unwrap(await supabase.rpc('publish_round', {
+    p_game_id: req.params.gameId,
+    p_round_id: req.params.roundId,
+    p_announcement: parsed.data.announcement,
+  }));
 
   res.json({ ok: true });
 });
@@ -458,7 +292,9 @@ router.get('/games/:gameId/rounds/:roundId/results', requireAuth, async (req, re
         id: question.id,
         prompt: question.prompt,
         yourAnswer: question.submissions[0]?.rawAnswer || '',
-        yourNormalizedAnswer: normalizeAnswer(question.submissions[0]?.rawAnswer || ''),
+        yourNormalizedAnswer: question.answerStats.some((stat) => stat.normalizedAnswer === question.submissions[0]?.rawAnswer)
+          ? question.submissions[0].rawAnswer
+          : normalizeAnswer(question.submissions[0]?.rawAnswer || ''),
         stats: question.answerStats,
       })),
     },

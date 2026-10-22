@@ -87,76 +87,13 @@ router.post('/games/:gameId/suggestions/:suggestionId/promote', requireAuth, asy
     return res.status(403).json({ message: 'Admin only.' });
   }
 
-  const suggestion = unwrap(
-    await supabase
-      .from('QuestionSuggestion')
-      .select('*')
-      .eq('id', req.params.suggestionId)
-      .eq('gameId', req.params.gameId)
-      .maybeSingle(),
-  );
-  if (!suggestion) {
-    return res.status(404).json({ message: 'Suggestion not found.' });
-  }
-  if (suggestion.status !== 'PENDING') {
-    return res.status(400).json({ message: 'Only pending suggestions can be promoted.' });
-  }
-
   const parsed = promotionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: validationMessage(parsed) });
-  }
-
-  const round = unwrap(
-    await supabase
-      .from('Round')
-      .select('*')
-      .eq('id', parsed.data.roundId)
-      .eq('gameId', req.params.gameId)
-      .maybeSingle(),
-  );
-  if (!round) {
-    return res.status(404).json({ message: 'Round not found.' });
-  }
-  if (round.status !== 'DRAFT') {
-    return res.status(400).json({ message: 'Suggestions can only be promoted into draft rounds.' });
-  }
-
-  const questions = unwrap(await supabase.from('Question').select('position').eq('roundId', round.id));
-  if (questions.length >= 20) {
-    return res.status(409).json({ message: 'Round already has the maximum 20 questions.' });
-  }
-  const nextPosition = questions.reduce((max, question) => Math.max(max, question.position), 0) + 1;
-
-  const promoted = unwrap(
-    await supabase
-      .from('QuestionSuggestion')
-      .update({ status: 'PROMOTED', promotedRoundId: round.id })
-      .eq('id', req.params.suggestionId)
-      .eq('status', 'PENDING')
-      .select('id')
-      .maybeSingle(),
-  );
-  if (!promoted) {
-    return res.status(409).json({ message: 'Suggestion was already reviewed.' });
-  }
-
-  try {
-    unwrap(
-      await supabase.from('Question').insert({
-        roundId: round.id,
-        prompt: suggestion.prompt,
-        position: nextPosition,
-      }),
-    );
-  } catch (error) {
-    await supabase
-      .from('QuestionSuggestion')
-      .update({ status: 'PENDING', promotedRoundId: null })
-      .eq('id', req.params.suggestionId)
-      .eq('status', 'PROMOTED');
-    throw error;
-  }
+  if (!parsed.success) return res.status(400).json({ message: validationMessage(parsed) });
+  unwrap(await supabase.rpc('promote_suggestion', {
+    p_game_id: req.params.gameId,
+    p_round_id: parsed.data.roundId,
+    p_suggestion_id: req.params.suggestionId,
+  }));
 
   res.json({ ok: true });
 });
