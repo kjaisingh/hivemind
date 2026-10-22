@@ -1,5 +1,91 @@
 import { expect, test } from '@playwright/test';
 
+async function mockGame(page, overrides = {}) {
+  const game = {
+    id: 'game-1', name: 'Test Hive', description: 'Friends playing together', code: 'ABC-234',
+    role: 'PLAYER', emailConfigured: false, leaderboard: [], pastRounds: [], draftRounds: [],
+    activeRound: {
+      id: 'round-1', name: 'Snack round', expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      questions: [{ id: 'question-1', prompt: 'Favorite snack?', type: 'TEXT' }],
+      answers: [{ questionId: 'question-1', rawAnswer: 'Chips' }],
+    },
+    ...overrides,
+  };
+  await page.route('**/api/auth/me', (route) => route.fulfill({ json: { user: { id: 'user-1', username: 'Player' } } }));
+  await page.route('**/api/games/game-1', (route) => route.fulfill({ json: { game } }));
+  await page.route('**/api/games/game-1/rounds/*/progress', (route) => route.fulfill({ json: { submittedCount: 1, totalCount: 3 } }));
+  await page.route('**/api/games/game-1/suggestions', (route) => route.fulfill({ json: { suggestions: [] } }));
+  return game;
+}
+
+test('discard restores saved answers and cancellation preserves edits', async ({ page }) => {
+  await mockGame(page);
+  await page.goto('/games/game-1');
+  const answer = page.getByRole('textbox', { name: 'Favorite snack?' });
+  await answer.fill('Pizza');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('tab', { name: 'Season Leaderboard', exact: true }).click();
+  await expect(answer).toHaveValue('Pizza');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('tab', { name: 'Season Leaderboard', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Season Leaderboard', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Active Round' }).click();
+  await expect(answer).toHaveValue('Chips');
+  await expect(page.getByRole('button', { name: 'Save Answers' })).toBeDisabled();
+});
+
+test('visible refresh discovers rounds and preserves unsaved answers and host settings', async ({ page }) => {
+  const game = await mockGame(page, {
+    role: 'ADMIN', activeRound: null,
+    emailSettings: { autoRoundOpen: true, autoResultsLive: true, expiringHoursCsv: '24,1' },
+  });
+  await page.goto('/games/game-1');
+  await expect(page.getByText(/No active round/)).toBeVisible();
+  game.activeRound = {
+    id: 'round-new', name: 'Fresh round', expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    questions: [{ id: 'question-1', prompt: 'Favorite snack?', type: 'TEXT' }], answers: [],
+  };
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('heading', { name: 'Fresh round' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Favorite snack?' }).fill('Unsaved pizza');
+  game.name = 'Updated hive';
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('heading', { name: 'Updated hive', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Favorite snack?' })).toHaveValue('Unsaved pizza');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('tab', { name: 'Manage Game' }).click();
+  await page.getByLabel('Round open emails').uncheck();
+  await page.getByLabel('Round name', { exact: true }).fill('My next round');
+  game.name = 'Refreshed again';
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('heading', { name: 'Refreshed again', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Round open emails')).not.toBeChecked();
+  await expect(page.getByLabel('Round name', { exact: true })).toHaveValue('My next round');
+});
+
+test('dashboard action failures keep loaded games visible', async ({ page }) => {
+  await mockGame(page);
+  await page.route('**/api/dashboard', (route) => route.fulfill({ json: { games: [{
+    id: 'game-1', name: 'Existing hive', description: 'Still here', code: 'ABC-234', role: 'PLAYER',
+    hasPendingSubmission: false, recentClosedRounds: [],
+  }] } }));
+  await page.route('**/api/games/join', (route) => route.fulfill({ status: 404, json: { message: 'Game code not found.' } }));
+  await page.goto('/dashboard');
+  await expect(page.getByRole('button', { name: /Existing hive/ })).toBeVisible();
+  await page.getByLabel('Game code').fill('XYZ-234');
+  await page.getByRole('button', { name: 'Join', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Game code not found.');
+  await expect(page.getByRole('button', { name: /Existing hive/ })).toBeVisible();
+});
+
+test('long game content fits narrow screens in dark mode', async ({ page }) => {
+  await mockGame(page, { name: 'LongName'.repeat(10), description: 'Description'.repeat(20) });
+  await page.goto('/games/game-1');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Switch to dark mode' }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }),

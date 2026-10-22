@@ -5,7 +5,7 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
 ## Features
 
 - Create or join a game with a code, invite link, or QR code.
-- Play scheduled rounds with free-text and multiple-choice questions; revise answers until a round closes.
+- Play host-published rounds with free-text and multiple-choice questions; revise answers until the deadline. Game and dashboard updates refresh automatically while visible.
 - Suggest questions, or host a game by drafting, editing, and publishing rounds.
 - Earn points for matching answers and follow round results, medals, and the season leaderboard.
 - Explore answer counts and charts, and download aggregate results as CSV.
@@ -42,7 +42,7 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
 
 ## Feature backlog
 
-- Add live round updates without refreshing the page.
+- Add automatic opening for future rounds.
 - Add reusable question packs and bulk question import.
 - Let hosts assign co-hosts with limited permissions.
 - Add optional device notifications for round openings and deadlines.
