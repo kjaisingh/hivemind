@@ -1,22 +1,20 @@
-import { unwrap } from './db.js';
+import { readAll, readByIds, unwrap } from './db.js';
 
 export async function getDashboardData(supabase, userId) {
-  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('userId', userId));
+  const memberships = await readAll(supabase.from('GameMembership').select('*').eq('userId', userId));
   if (memberships.length === 0) {
     return { memberships: [], answersByRound: {} };
   }
 
   const gameIds = memberships.map((membership) => membership.gameId);
-  const games = unwrap(await supabase.from('Game').select('*').in('id', gameIds));
+  const games = await readByIds(gameIds, (ids) => supabase.from('Game').select('*').in('id', ids));
   const gamesById = new Map(games.map((game) => [game.id, game]));
 
-  const rounds = unwrap(
-    await supabase.from('Round').select('*').in('gameId', gameIds).order('expiresAt', { ascending: false }),
-  );
-  const roundIds = rounds.map((round) => round.id);
+  const rounds = await readByIds(gameIds, (ids) => supabase.from('Round').select('*').in('gameId', ids).order('expiresAt', { ascending: false }));
+  const roundIds = rounds.filter((round) => round.status === 'ACTIVE').map((round) => round.id);
 
   const questions = roundIds.length
-    ? unwrap(await supabase.from('Question').select('*').in('roundId', roundIds))
+    ? await readByIds(roundIds, (ids) => supabase.from('Question').select('*').in('roundId', ids))
     : [];
   const questionsById = new Map(questions.map((question) => [question.id, question]));
   const questionsByRound = new Map();
@@ -28,7 +26,7 @@ export async function getDashboardData(supabase, userId) {
 
   const questionIds = questions.map((question) => question.id);
   const submissions = questionIds.length
-    ? unwrap(await supabase.from('Submission').select('*').eq('userId', userId).in('questionId', questionIds))
+    ? await readByIds(questionIds, (ids) => supabase.from('Submission').select('*').eq('userId', userId).in('questionId', ids))
     : [];
 
   const answersByRound = {};
@@ -61,20 +59,17 @@ export async function getGameDetail(supabase, gameId) {
     return null;
   }
 
-  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', gameId));
+  const memberships = await readAll(supabase.from('GameMembership').select('*').eq('gameId', gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const users = userIds.length ? unwrap(await supabase.from('User').select('id,username').in('id', userIds)) : [];
+  const users = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,username').in('id', ids)) : [];
   const usersById = new Map(users.map((user) => [user.id, user]));
 
-  const rounds = unwrap(
-    await supabase.from('Round').select('*').eq('gameId', gameId).order('createdAt', { ascending: false }),
-  );
-  const roundIds = rounds.map((round) => round.id);
+  const rounds = await readAll(supabase.from('Round').select('*').eq('gameId', gameId).order('createdAt', { ascending: false }));
+  const roundIds = rounds.filter((round) => round.status === 'CLOSED').map((round) => round.id);
+  const questionRoundIds = rounds.filter((round) => round.status !== 'CLOSED').map((round) => round.id);
 
-  const questions = roundIds.length
-    ? unwrap(
-        await supabase.from('Question').select('*').in('roundId', roundIds).order('position', { ascending: true }),
-      )
+  const questions = questionRoundIds.length
+    ? await readByIds(questionRoundIds, (ids) => supabase.from('Question').select('*').in('roundId', ids).order('position', { ascending: true }))
     : [];
   const questionsByRound = new Map();
   for (const question of questions) {
@@ -88,7 +83,7 @@ export async function getGameDetail(supabase, gameId) {
   );
 
   const scores = roundIds.length
-    ? unwrap(await supabase.from('RoundScore').select('*').in('roundId', roundIds))
+    ? await readByIds(roundIds, (ids) => supabase.from('RoundScore').select('*').in('roundId', ids))
     : [];
 
   const scoreMap = new Map();
@@ -120,33 +115,27 @@ export async function getRoundResults(supabase, roundId, gameId, userId) {
 
   const game = unwrap(await supabase.from('Game').select('*').eq('id', round.gameId).maybeSingle());
 
-  const scores = unwrap(
-    await supabase
+  const scores = await readAll(supabase
       .from('RoundScore')
       .select('*')
       .eq('roundId', roundId)
       .order('rank', { ascending: true })
-      .order('totalScore', { ascending: false }),
-  );
+      .order('totalScore', { ascending: false }));
   const scoreUserIds = scores.map((score) => score.userId);
   const scoreUsers = scoreUserIds.length
-    ? unwrap(await supabase.from('User').select('id,username').in('id', scoreUserIds))
+    ? await readByIds(scoreUserIds, (ids) => supabase.from('User').select('id,username').in('id', ids))
     : [];
   const usersById = new Map(scoreUsers.map((user) => [user.id, user]));
 
-  const questions = unwrap(
-    await supabase.from('Question').select('*').eq('roundId', roundId).order('position', { ascending: true }),
-  );
+  const questions = await readAll(supabase.from('Question').select('*').eq('roundId', roundId).order('position', { ascending: true }));
   const questionIds = questions.map((question) => question.id);
 
   const answerStats = questionIds.length
-    ? unwrap(
-        await supabase
+    ? await readByIds(questionIds, (ids) => supabase
           .from('QuestionAnswerStat')
           .select('*')
-          .in('questionId', questionIds)
-          .order('count', { ascending: false }),
-      )
+          .in('questionId', ids)
+          .order('count', { ascending: false }))
     : [];
   const statsByQuestion = new Map();
   for (const stat of answerStats) {
@@ -156,7 +145,7 @@ export async function getRoundResults(supabase, roundId, gameId, userId) {
   }
 
   const ownSubmissions = questionIds.length
-    ? unwrap(await supabase.from('Submission').select('*').eq('userId', userId).in('questionId', questionIds))
+    ? await readByIds(questionIds, (ids) => supabase.from('Submission').select('*').eq('userId', userId).in('questionId', ids))
     : [];
   const submissionByQuestion = new Map(ownSubmissions.map((submission) => [submission.questionId, submission]));
 
@@ -178,16 +167,14 @@ export async function getRoundScoringData(supabase, roundId) {
     return null;
   }
 
-  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
+  const memberships = await readAll(supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const players = userIds.length ? unwrap(await supabase.from('User').select('id,username').in('id', userIds)) : [];
+  const players = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,username').in('id', ids)) : [];
 
-  const questions = unwrap(
-    await supabase.from('Question').select('*').eq('roundId', roundId).order('position', { ascending: true }),
-  );
+  const questions = await readAll(supabase.from('Question').select('*').eq('roundId', roundId).order('position', { ascending: true }));
   const questionIds = questions.map((question) => question.id);
   const submissions = questionIds.length
-    ? unwrap(await supabase.from('Submission').select('*').in('questionId', questionIds))
+    ? await readByIds(questionIds, (ids) => supabase.from('Submission').select('*').in('questionId', ids))
     : [];
   const submissionsByQuestion = new Map();
   for (const submission of submissions) {
@@ -212,12 +199,12 @@ async function attachGameContext(supabase, rounds, { withQuestions = false } = {
   }
 
   const gameIds = [...new Set(rounds.map((round) => round.gameId))];
-  const games = unwrap(await supabase.from('Game').select('*').in('id', gameIds));
+  const games = await readByIds(gameIds, (ids) => supabase.from('Game').select('*').in('id', ids));
   const gamesById = new Map(games.map((game) => [game.id, game]));
 
-  const memberships = unwrap(await supabase.from('GameMembership').select('*').in('gameId', gameIds));
+  const memberships = await readByIds(gameIds, (ids) => supabase.from('GameMembership').select('*').in('gameId', ids));
   const userIds = [...new Set(memberships.map((membership) => membership.userId))];
-  const users = userIds.length ? unwrap(await supabase.from('User').select('id,email,username').in('id', userIds)) : [];
+  const users = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,email,username').in('id', ids)) : [];
   const usersById = new Map(users.map((user) => [user.id, user]));
 
   const membershipsByGame = new Map();
@@ -227,15 +214,13 @@ async function attachGameContext(supabase, rounds, { withQuestions = false } = {
     membershipsByGame.set(membership.gameId, list);
   }
 
-  const emailSettingsRows = unwrap(
-    await supabase.from('GameEmailSettings').select('*').in('gameId', gameIds),
-  );
+  const emailSettingsRows = await readByIds(gameIds, (ids) => supabase.from('GameEmailSettings').select('*').in('gameId', ids));
   const emailSettingsByGame = new Map(emailSettingsRows.map((row) => [row.gameId, row]));
 
   const questionsByRound = new Map();
   if (withQuestions) {
     const roundIds = rounds.map((round) => round.id);
-    const questions = unwrap(await supabase.from('Question').select('*').in('roundId', roundIds));
+    const questions = await readByIds(roundIds, (ids) => supabase.from('Question').select('*').in('roundId', ids));
     for (const question of questions) {
       const list = questionsByRound.get(question.roundId) || [];
       list.push(question);
@@ -255,15 +240,13 @@ async function attachGameContext(supabase, rounds, { withQuestions = false } = {
 }
 
 export async function getSuggestionsForGame(supabase, gameId) {
-  const suggestions = unwrap(
-    await supabase
+  const suggestions = await readAll(supabase
       .from('QuestionSuggestion')
       .select('*')
       .eq('gameId', gameId)
-      .order('createdAt', { ascending: false }),
-  );
+      .order('createdAt', { ascending: false }));
   const userIds = [...new Set(suggestions.map((suggestion) => suggestion.submittedById))];
-  const users = userIds.length ? unwrap(await supabase.from('User').select('id,username').in('id', userIds)) : [];
+  const users = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,username').in('id', ids)) : [];
   const usersById = new Map(users.map((user) => [user.id, user]));
 
   return suggestions.map((suggestion) => ({
@@ -273,13 +256,17 @@ export async function getSuggestionsForGame(supabase, gameId) {
 }
 
 export async function getRoundsForClosing(supabase, now) {
-  const rounds = unwrap(
-    await supabase.from('Round').select('*').eq('status', 'ACTIVE').lte('expiresAt', now.toISOString()),
-  );
-  return attachGameContext(supabase, rounds);
+  const rounds = await readAll(supabase.from('Round').select('*').eq('status', 'ACTIVE').lte('expiresAt', now.toISOString()));
+  return rounds;
 }
 
 export async function getActiveRoundsWithContext(supabase) {
-  const rounds = unwrap(await supabase.from('Round').select('*').eq('status', 'ACTIVE'));
+  const rounds = await readAll(supabase.from('Round').select('*').eq('status', 'ACTIVE'));
   return attachGameContext(supabase, rounds, { withQuestions: true });
+}
+
+export async function getRecentClosedRoundsWithContext(supabase, now) {
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const rounds = await readAll(supabase.from('Round').select('*').eq('status', 'CLOSED').gte('expiresAt', since).lte('expiresAt', now.toISOString()));
+  return attachGameContext(supabase, rounds);
 }

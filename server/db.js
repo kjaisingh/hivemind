@@ -28,3 +28,23 @@ export function unwrap({ data, error }) {
 export function isUniqueViolation(error) {
   return error?.code === '23505';
 }
+
+export async function readAll(query) {
+  const pageSize = 500;
+  const rows = [];
+  query.order('id', { ascending: true });
+  for (let offset = 0; ; offset += pageSize) {
+    const page = unwrap(await query.range(offset, offset + pageSize - 1));
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+export async function readByIds(ids, queryForIds) {
+  const rows = [];
+  const uniqueIds = [...new Set(ids)];
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    rows.push(...await readAll(queryForIds(uniqueIds.slice(offset, offset + 100))));
+  }
+  return rows;
+}

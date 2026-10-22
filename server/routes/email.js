@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase, unwrap } from '../db.js';
+import { supabase, readAll, readByIds, unwrap } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { sendEmail } from '../email.js';
 import { getRole } from '../helpers.js';
@@ -53,9 +53,9 @@ router.post('/games/:gameId/email/manual', requireAuth, emailLimiter, async (req
   if (!game) {
     return res.status(404).json({ message: 'Game not found.' });
   }
-  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', req.params.gameId));
+  const memberships = await readAll(supabase.from('GameMembership').select('*').eq('gameId', req.params.gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const users = userIds.length ? unwrap(await supabase.from('User').select('id,email').in('id', userIds)) : [];
+  const users = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,email').in('id', ids)) : [];
 
   let sentCount = 0;
   let skippedCount = 0;
