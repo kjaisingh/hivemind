@@ -9,7 +9,7 @@ export function mockDatabase(tables) {
       let action = 'select';
       let values;
       let start = 0;
-      let end = Infinity;
+      let end = 999;
       let single = false;
       let conflictKeys = [];
       let ignoreDuplicates = false;

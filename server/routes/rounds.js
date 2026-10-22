@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import dayjs from 'dayjs';
-import { isUniqueViolation, supabase, unwrap } from '../db.js';
+import { isUniqueViolation, supabase, readAll, readByIds, unwrap } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { getRoundResults } from '../repository.js';
 import { processRounds, sendWithDedup } from '../roundScheduler.js';
@@ -37,7 +37,7 @@ router.post('/games/:gameId/active-round/save', requireAuth, async (req, res) =>
     return res.status(400).json({ message: 'Round is closed.' });
   }
 
-  const questions = unwrap(await supabase.from('Question').select('*').eq('roundId', round.id));
+  const questions = await readAll(supabase.from('Question').select('*').eq('roundId', round.id));
   const parsed = answersSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: validationMessage(parsed) });
@@ -160,9 +160,7 @@ router.put('/games/:gameId/rounds/:roundId', requireAuth, async (req, res) => {
     return res.status(400).json({ message: 'Only draft rounds can be edited.' });
   }
 
-  const previousQuestions = unwrap(
-    await supabase.from('Question').select('*').eq('roundId', existing.id).order('position', { ascending: true }),
-  );
+  const previousQuestions = await readAll(supabase.from('Question').select('*').eq('roundId', existing.id).order('position', { ascending: true }));
 
   const round = unwrap(
     await supabase
@@ -322,30 +320,6 @@ router.post('/games/:gameId/rounds/:roundId/publish', requireAuth, async (req, r
     return res.status(409).json({ message: 'Round is no longer a draft.' });
   }
 
-  const game = unwrap(await supabase.from('Game').select('*').eq('id', round.gameId).maybeSingle());
-  const emailSettings = unwrap(
-    await supabase.from('GameEmailSettings').select('*').eq('gameId', round.gameId).maybeSingle(),
-  );
-
-  if (emailSettings?.autoRoundOpen) {
-    const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
-    const userIds = memberships.map((membership) => membership.userId);
-    const users = userIds.length ? unwrap(await supabase.from('User').select('id,email').in('id', userIds)) : [];
-
-    for (const user of users) {
-      await sendWithDedup(supabase, {
-        dedupeKey: `round-open:${round.id}:${user.id}`,
-        gameId: round.gameId,
-        roundId: round.id,
-        recipient: user,
-        emailType: 'ROUND_OPEN',
-        subject: `${game.name}: ${round.name} is live`,
-        intro: parsed.data.announcement || 'A fresh round just opened. Time to read minds and earn points.',
-        gameName: game.name,
-      });
-    }
-  }
-
   res.json({ ok: true });
 });
 
@@ -368,22 +342,22 @@ router.post('/games/:gameId/rounds/:roundId/remind', requireAuth, emailLimiter, 
     return res.status(404).json({ message: 'Round not found.' });
   }
 
-  if (round.status !== 'ACTIVE') {
+  if (round.status !== 'ACTIVE' || new Date(round.expiresAt) <= new Date()) {
     return res.status(400).json({ message: 'Only active rounds can be reminded.' });
   }
 
   const game = unwrap(await supabase.from('Game').select('*').eq('id', round.gameId).maybeSingle());
-  const questions = unwrap(await supabase.from('Question').select('*').eq('roundId', round.id));
+  const questions = await readAll(supabase.from('Question').select('*').eq('roundId', round.id));
   const questionIds = questions.map((question) => question.id);
 
   const submissions = questionIds.length
-    ? unwrap(await supabase.from('Submission').select('*').in('questionId', questionIds))
+    ? await readByIds(questionIds, (ids) => supabase.from('Submission').select('*').in('questionId', ids))
     : [];
   const submittedPairs = new Set(submissions.map((item) => `${item.userId}:${item.questionId}`));
 
-  const memberships = unwrap(await supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
+  const memberships = await readAll(supabase.from('GameMembership').select('*').eq('gameId', round.gameId));
   const userIds = memberships.map((membership) => membership.userId);
-  const users = userIds.length ? unwrap(await supabase.from('User').select('id,email').in('id', userIds)) : [];
+  const users = userIds.length ? await readByIds(userIds, (ids) => supabase.from('User').select('id,email').in('id', ids)) : [];
 
   const pendingUsers = users.filter(
     (user) => !questionIds.every((questionId) => submittedPairs.has(`${user.id}:${questionId}`)),
@@ -427,12 +401,12 @@ router.get('/games/:gameId/rounds/:roundId/progress', requireAuth, async (req, r
   }
 
   const [questions, memberships] = await Promise.all([
-    supabase.from('Question').select('id').eq('roundId', round.id),
-    supabase.from('GameMembership').select('userId').eq('gameId', req.params.gameId),
-  ]).then((results) => results.map(unwrap));
+    readAll(supabase.from('Question').select('id').eq('roundId', round.id)),
+    readAll(supabase.from('GameMembership').select('userId').eq('gameId', req.params.gameId)),
+  ]);
   const questionIds = questions.map((question) => question.id);
   const submissions = questionIds.length
-    ? unwrap(await supabase.from('Submission').select('questionId,userId').in('questionId', questionIds))
+    ? await readByIds(questionIds, (ids) => supabase.from('Submission').select('questionId,userId').in('questionId', ids))
     : [];
   const countsByUser = new Map();
   for (const submission of submissions) {

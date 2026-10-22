@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { isUniqueViolation, supabase, unwrap } from '../db.js';
+import { isUniqueViolation, supabase, readAll, unwrap } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { getDashboardData, getGameDetail } from '../repository.js';
 import { processRounds } from '../roundScheduler.js';
@@ -140,13 +140,11 @@ router.get('/games/:gameId', requireAuth, async (req, res) => {
 
   let answers = [];
   if (activeRound) {
-    answers = unwrap(
-      await supabase
+    answers = await readAll(supabase
         .from('Submission')
         .select('*')
         .eq('userId', req.user.id)
-        .in('questionId', activeRound.questions.map((question) => question.id)),
-    );
+        .in('questionId', activeRound.questions.map((question) => question.id)));
   }
 
   res.json({

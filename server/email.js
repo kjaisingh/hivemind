@@ -42,7 +42,7 @@ function buildTextEmail(intro, gameName, ctaLink) {
   return `${intro}\n\nYou are receiving this because you are part of ${gameName}.\n\nOpen Hivemind: ${ctaLink}`;
 }
 
-export async function sendEmail({ to, subject, intro, gameName }) {
+export async function sendEmail({ to, subject, intro, gameName, idempotencyKey }) {
   const appUrl = process.env.CLIENT_URL || process.env.BASE_URL || 'http://localhost:5183';
   const html = buildEmail(subject, intro, gameName, appUrl);
 
@@ -61,6 +61,7 @@ export async function sendEmail({ to, subject, intro, gameName }) {
       headers: {
         Authorization: `Bearer ${getResendApiKey()}`,
         'Content-Type': 'application/json',
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: process.env.SMTP_FROM,
@@ -81,9 +82,8 @@ export async function sendEmail({ to, subject, intro, gameName }) {
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new EmailDeliveryError(`Message failed: ${response.status} ${body.message || response.statusText}`, {
-      retryable: response.status === 429 || response.status >= 500,
+    throw new EmailDeliveryError(`Email provider rejected the request (${response.status}).`, {
+      retryable: response.status === 409 || response.status === 429 || response.status >= 500,
       status: response.status,
     });
   }

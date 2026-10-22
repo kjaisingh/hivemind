@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # eslint-plugin-react currently supports ESLint 9 at most.
+      - dependency-name: eslint
+        versions: [">=10 <11"]
+      - dependency-name: "@eslint/js"
+        versions: [">=10 <11"]
     groups:
       npm-minor-patch:
         update-types:

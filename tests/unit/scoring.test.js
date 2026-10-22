@@ -24,6 +24,8 @@ test('scoring tolerates another writer inserting derived rows after deletion', a
     from(table) {
       const filters = [];
       let action = 'select';
+      let start = 0;
+      let end = 999;
       const matching = (row) => filters.every((filter) => filter(row));
 
       return {
@@ -31,6 +33,7 @@ test('scoring tolerates another writer inserting derived rows after deletion', a
         eq(column, value) { filters.push((row) => row[column] === value); return this; },
         in(column, values) { filters.push((row) => values.includes(row[column])); return this; },
         order() { return this; },
+        range(from, to) { start = from; end = to; return this; },
         delete() { action = 'delete'; return this; },
         async maybeSingle() { return { data: tables[table].find(matching) || null, error: null }; },
         async upsert(rows, { onConflict }) {
@@ -54,7 +57,7 @@ test('scoring tolerates another writer inserting derived rows after deletion', a
             }
             return Promise.resolve({ data: null, error: null }).then(resolve, reject);
           }
-          return Promise.resolve({ data: tables[table].filter(matching), error: null }).then(resolve, reject);
+          return Promise.resolve({ data: tables[table].filter(matching).slice(start, end + 1), error: null }).then(resolve, reject);
         },
       };
     },
