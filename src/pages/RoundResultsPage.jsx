@@ -10,6 +10,7 @@ export default function RoundResultsPage() {
   const { user } = useAuth();
   const routeKey = `${gameId}/${roundId}`;
   const [result, setResult] = useState({ routeKey: '', round: null, error: '' });
+  const [retry, setRetry] = useState(0);
   const round = result.routeKey === routeKey ? result.round : null;
   const error = result.routeKey === routeKey ? result.error : '';
   const [isDark, setIsDark] = useState(() => document.documentElement.getAttribute('data-theme') === 'dark');
@@ -25,7 +26,7 @@ export default function RoundResultsPage() {
         if (active) setResult({ routeKey, round: null, error: loadError.message });
       });
     return () => { active = false; };
-  }, [gameId, roundId, routeKey]);
+  }, [gameId, roundId, routeKey, retry]);
 
   useEffect(() => {
     const handleThemeChange = (event) => setIsDark(event.detail === 'dark');
@@ -47,15 +48,16 @@ export default function RoundResultsPage() {
 
   if (error) {
     return (
-      <div className="page stack">
+      <main className="page stack">
         <p className="error" role="alert">{error}</p>
+        <button className="button" type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button>
         <Link className="button button-secondary" to={`/games/${gameId}`}>Back to game</Link>
-      </div>
+      </main>
     );
   }
 
   if (!round) {
-    return <div className="page"><p>Loading results...</p></div>;
+    return <main className="page" aria-busy="true"><p role="status">Loading results...</p></main>;
   }
 
   return (
@@ -160,7 +162,7 @@ export default function RoundResultsPage() {
           <h2>What&apos;s next?</h2>
           <p className="small">See where you stand across the season, or head back to the game.</p>
         </div>
-        <Link className="button" to={`/games/${gameId}`}>Season leaderboard</Link>
+        <Link className="button" to={`/games/${gameId}?tab=leaderboard`}>Season leaderboard</Link>
       </section>
     </main>
   );

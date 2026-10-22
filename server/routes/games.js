@@ -175,7 +175,7 @@ router.get('/games/:gameId', requireAuth, async (req, res) => {
         name: round.name,
         expiresAt: round.expiresAt,
       })),
-      draftRounds: draftRounds.map((round) => ({
+      draftRounds: (role === 'ADMIN' ? draftRounds : []).map((round) => ({
         id: round.id,
         name: round.name,
         description: round.description,
@@ -183,7 +183,7 @@ router.get('/games/:gameId', requireAuth, async (req, res) => {
         expiresAt: round.expiresAt,
         questions: round.questions,
       })),
-      emailSettings,
+      emailSettings: role === 'ADMIN' ? emailSettings : null,
     },
   });
 });

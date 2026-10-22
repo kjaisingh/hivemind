@@ -12,6 +12,7 @@ export default function RoundForm({ roundForm, setRoundForm, editingRoundId, cre
   return (
     <div className="card stack">
       <h2>{editingRoundId ? 'Edit Draft Round' : 'Create Round'}</h2>
+      <p className="small">Times use your local timezone. Save a draft, then publish it when you are ready. Rounds do not open automatically.</p>
       <form className="stack" onSubmit={onSubmit}>
         <label className="field stack-xs">
           <span>Round name</span>

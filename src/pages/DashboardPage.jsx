@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/auth';
 import { getUrgencyTier, formatTimeRemaining, urgencyPillClass } from '../lib/countdown';
 import { formatJoinCode } from '../lib/joinCode';
+import { useRevalidation } from '../lib/useRevalidation';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -14,25 +15,31 @@ export default function DashboardPage() {
   const [creatingGame, setCreatingGame] = useState(false);
   const [joiningGame, setJoiningGame] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
+  const requestRef = useRef(0);
   const [now, setNow] = useState(() => Date.now());
 
-  async function loadDashboard() {
-    setError('');
-    setLoading(true);
+  const loadDashboard = useCallback(async () => {
+    const requestId = ++requestRef.current;
     try {
       const data = await api('/api/dashboard');
+      if (requestId !== requestRef.current) return;
       setGames(data.games);
+      setLoadError('');
     } catch (loadError) {
-      setError(loadError.message);
+      if (requestId === requestRef.current) setLoadError(loadError.message);
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void loadDashboard();
-  }, []);
+    return () => { requestRef.current += 1; };
+  }, [loadDashboard]);
+
+  useRevalidation(loadDashboard);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -97,7 +104,7 @@ export default function DashboardPage() {
       <header className="row-between">
         <div>
           <h1>Welcome, {user?.username}</h1>
-          <p>{loading ? 'Loading your hive...' : error ? 'Your hive could not be loaded.' : `Your hive is buzzing across ${games.length} game(s).`}</p>
+          <p>{loading ? 'Loading your hive...' : `Your hive is buzzing across ${games.length} ${games.length === 1 ? 'game' : 'games'}.`}</p>
         </div>
         <div className="row">
           <button className="button button-secondary" onClick={logout} type="button">Logout</button>
@@ -161,8 +168,8 @@ export default function DashboardPage() {
       </section>
 
       <section className="card">
-        <h2>Actionable Alerts</h2>
-        {loading ? <p>Loading alerts...</p> : error ? null : pendingAlerts.length === 0 ? <p>No unanswered active rounds right now.</p> : (
+        <h2>Your next round</h2>
+        {loading ? <p>Loading alerts...</p> : loadError && games.length === 0 ? null : pendingAlerts.length === 0 ? <p>No unanswered active rounds right now.</p> : (
           <ul className="stack">
             {pendingAlerts.map((game) => (
               <li key={game.id} className="list-item">
@@ -175,8 +182,8 @@ export default function DashboardPage() {
       </section>
 
       <section className="card">
-        <h2>Active Games</h2>
-        {loading ? <p>Loading games...</p> : error ? null : games.length === 0 ? <p>No games yet. Create one or join with a code.</p> : (
+        <h2>Your games</h2>
+        {loading ? <p>Loading games...</p> : loadError && games.length === 0 ? null : games.length === 0 ? <p>No games yet. Create one or join with a code.</p> : (
         <div className="stack">
           {games.map((game) => (
             <button key={game.id} type="button" className="game-card" onClick={() => navigate(`/games/${game.id}`)}>
@@ -198,7 +205,7 @@ export default function DashboardPage() {
 
       <section className="card">
         <h2>Recent Activity</h2>
-        {loading ? <p>Loading activity...</p> : error ? null : recentActivity.length === 0 ? <p>No rounds have closed yet.</p> : (
+        {loading ? <p>Loading activity...</p> : loadError && games.length === 0 ? null : recentActivity.length === 0 ? <p>No rounds have closed yet.</p> : (
           <ul className="stack">
             {recentActivity.map((item) => (
               <li key={item.id} className="list-item">
@@ -210,9 +217,10 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {error && (
+      {error && <p className="error" role="alert">{error}</p>}
+      {loadError && (
         <div className="error row-between" role="alert">
-          <span>{error}</span>
+          <span>{loadError}</span>
           <button className="link" type="button" onClick={loadDashboard}>
             Retry
           </button>

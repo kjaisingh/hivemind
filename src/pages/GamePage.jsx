@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useRevalidation } from '../lib/useRevalidation';
 import { useAuth } from '../context/auth';
 import { GAME_TABS, GAME_TAB_LABELS, resolveGameTab } from '../lib/gameTabs';
 import ActiveRoundTab from '../components/game/ActiveRoundTab';
@@ -16,8 +17,8 @@ function defaultRoundForm() {
   return {
     name: '',
     description: '',
-    startsAt: '',
-    expiresAt: '',
+    startsAt: dayjs().format('YYYY-MM-DDTHH:mm'),
+    expiresAt: dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm'),
     questions: [{ prompt: '', type: 'TEXT', choices: ['', ''] }],
   };
 }
@@ -32,6 +33,10 @@ function defaultManualEmail() {
 
 export default function GamePage() {
   const { gameId } = useParams();
+  return <Game key={gameId} gameId={gameId} />;
+}
+
+function Game({ gameId }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
 
@@ -40,7 +45,8 @@ export default function GamePage() {
   const [answers, setAnswers] = useState({});
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [roundForm, setRoundForm] = useState(defaultRoundForm());
+  const [refreshError, setRefreshError] = useState('');
+  const [roundForm, setRoundForm] = useState(defaultRoundForm);
   const [announcement, setAnnouncement] = useState('');
   const [draftToPublish, setDraftToPublish] = useState('');
   const [emailSettings, setEmailSettings] = useState(defaultEmailSettings);
@@ -68,24 +74,26 @@ export default function GamePage() {
   const loadGameRequestRef = useRef(0);
   const copyTimerRef = useRef(null);
   const answersDirtyRef = useRef(false);
+  const savedAnswersRef = useRef({});
+  const emailSettingsDirtyRef = useRef(false);
   const loadedRoundIdRef = useRef(null);
   const handleRoundExpire = useCallback(() => setRoundExpired(true), []);
 
-  const loadGame = useCallback(async () => {
+  const loadGame = useCallback(async ({ background = false } = {}) => {
     const requestId = ++loadGameRequestRef.current;
     try {
       const data = await api(`/api/games/${gameId}`);
       if (requestId !== loadGameRequestRef.current) return;
 
-      setError('');
+      if (!background) setError('');
+      setRefreshError('');
       setGame(data.game);
       const incomingRoundId = data.game.activeRound?.id || null;
+      savedAnswersRef.current = Object.fromEntries(
+        (data.game.activeRound?.answers || []).map((item) => [item.questionId, item.rawAnswer]),
+      );
       if (!answersDirtyRef.current || loadedRoundIdRef.current !== incomingRoundId) {
-        setAnswers(
-          data.game.activeRound
-            ? Object.fromEntries(data.game.activeRound.answers.map((item) => [item.questionId, item.rawAnswer]))
-            : {},
-        );
+        setAnswers(savedAnswersRef.current);
         answersDirtyRef.current = false;
         setAnswersDirty(false);
       }
@@ -97,7 +105,7 @@ export default function GamePage() {
       );
 
       const incomingEmailSettings = data.game.emailSettings;
-      setEmailSettings(incomingEmailSettings
+      if (!emailSettingsDirtyRef.current) setEmailSettings(incomingEmailSettings
         ? {
           autoRoundOpen: incomingEmailSettings.autoRoundOpen,
           autoResultsLive: incomingEmailSettings.autoResultsLive,
@@ -117,43 +125,9 @@ export default function GamePage() {
       }
     } catch (err) {
       if (requestId !== loadGameRequestRef.current) return;
-      setError(err.message || 'Failed to load game');
+      if (background) setRefreshError('Could not refresh the game. Reconnecting automatically.');
+      else setError(err.message || 'Failed to load game');
     }
-  }, [gameId]);
-
-  useEffect(() => {
-    loadGameRequestRef.current += 1;
-    setGame(null);
-    setActiveTab('active');
-    setAnswers({});
-    answersDirtyRef.current = false;
-    loadedRoundIdRef.current = null;
-    setAnswersDirty(false);
-    setStatus('');
-    setError('');
-    setRoundForm(defaultRoundForm());
-    setAnnouncement('');
-    setEditingRoundId(null);
-    setDraftToPublish('');
-    setEmailSettings(defaultEmailSettings());
-    setManualEmail(defaultManualEmail());
-    setRoundExpired(false);
-    setSavingAnswers(false);
-    setCreatingRound(false);
-    setPublishing(false);
-    setSavingEmailSettings(false);
-    setSendingEmail(false);
-    setRemindingPlayers(false);
-    setSuggestions([]);
-    setSuggestionPrompt('');
-    setSubmittingSuggestion(false);
-    setPromoteTargets({});
-    setCopiedField(null);
-    setQrDataUrl(null);
-    setDismissingSuggestionId(null);
-    setPromotingSuggestionId(null);
-    setProgress(null);
-    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
   }, [gameId]);
 
   useEffect(() => () => {
@@ -162,7 +136,11 @@ export default function GamePage() {
 
   useEffect(() => {
     void loadGame();
+    return () => { loadGameRequestRef.current += 1; };
   }, [loadGame]);
+
+  const refreshGame = useCallback(() => loadGame({ background: true }), [loadGame]);
+  useRevalidation(refreshGame, !savingAnswers && !creatingRound && !publishing && !savingEmailSettings);
 
   useEffect(() => {
     setRoundExpired(false);
@@ -199,7 +177,7 @@ export default function GamePage() {
     let active = true;
     let inFlight = false;
     const loadProgress = async () => {
-      if (inFlight) return;
+      if (inFlight || document.visibilityState !== 'visible') return;
       inFlight = true;
       try {
         const data = await api(`/api/games/${gameId}/rounds/${roundId}/progress`);
@@ -245,7 +223,12 @@ export default function GamePage() {
   }, [game, searchParams, setSearchParams]);
 
   function confirmDiscardAnswers() {
-    return !answersDirtyRef.current || window.confirm('Discard your unsaved answers?');
+    if (!answersDirtyRef.current) return true;
+    if (!window.confirm('Discard your unsaved answers?')) return false;
+    setAnswers(savedAnswersRef.current);
+    answersDirtyRef.current = false;
+    setAnswersDirty(false);
+    return true;
   }
 
   function selectTab(tab) {
@@ -305,17 +288,20 @@ export default function GamePage() {
   }
 
   async function saveAnswers() {
+    loadGameRequestRef.current += 1;
     setError('');
     setSavingAnswers(true);
     try {
       const payload = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
       await api(`/api/games/${gameId}/active-round/save`, { method: 'POST', body: JSON.stringify({ answers: payload }) });
+      savedAnswersRef.current = { ...answers };
       setStatus('Answers saved.');
       answersDirtyRef.current = false;
       setAnswersDirty(false);
     } catch (err) {
       setError(err.message || 'Failed to save answers');
     } finally {
+      loadGameRequestRef.current += 1;
       setSavingAnswers(false);
     }
   }
@@ -415,6 +401,7 @@ export default function GamePage() {
     setSavingEmailSettings(true);
     try {
       await api(`/api/games/${gameId}/email-settings`, { method: 'PUT', body: JSON.stringify(emailSettings) });
+      emailSettingsDirtyRef.current = false;
       setStatus('Email settings saved.');
     } catch (err) {
       setError(err.message || 'Failed to save email settings');
@@ -521,6 +508,7 @@ export default function GamePage() {
   }
 
   function toggleHour(hour) {
+    emailSettingsDirtyRef.current = true;
     setEmailSettings((prev) => ({
       ...prev,
       expiringHours: prev.expiringHours.includes(hour)
@@ -538,6 +526,11 @@ export default function GamePage() {
     } catch {
       setError('Could not copy to clipboard.');
     }
+  }
+
+  function updateEmailSettings(updater) {
+    emailSettingsDirtyRef.current = true;
+    setEmailSettings(updater);
   }
 
   if (error && !game) {
@@ -573,7 +566,8 @@ export default function GamePage() {
         </Link>
       </div>
 
-      <nav className="tab-row" role="tablist">
+      {refreshError && <p className="warning" role="status">{refreshError}</p>}
+      <nav className="tab-row" role="tablist" aria-label="Game sections">
         {visibleTabs.map((tab) => (
           <button
             key={tab}
@@ -654,7 +648,7 @@ export default function GamePage() {
           deletingRoundId={deletingRoundId}
           emailConfigured={game.emailConfigured}
           emailSettings={emailSettings}
-          setEmailSettings={setEmailSettings}
+          setEmailSettings={updateEmailSettings}
           onToggleHour={toggleHour}
           savingEmailSettings={savingEmailSettings}
           onSaveEmailSettings={saveEmailSettings}
