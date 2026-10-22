@@ -10,7 +10,7 @@ export default function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { setUser } = useAuth();
 
   const invite = useMemo(() => searchParams.get('invite') || '', [searchParams]);
   const next = useMemo(() => {
@@ -45,15 +45,12 @@ export default function AuthPage() {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      await refresh();
+      setUser(data.user);
 
       if (invite || data.pendingInviteToken) {
         const inviteToken = invite || data.pendingInviteToken;
-        const joined = await api(`/api/join/${encodeURIComponent(inviteToken)}`);
-        if (!joined.requiresAuth) {
-          navigate(`/games/${joined.gameId}`);
-          return;
-        }
+        navigate(`/join/${encodeURIComponent(inviteToken)}`, { replace: true });
+        return;
       }
 
       navigate(next);

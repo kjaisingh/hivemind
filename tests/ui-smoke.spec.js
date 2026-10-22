@@ -92,6 +92,72 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test('session lookup failures can retry without redirecting to signup', async ({ page }) => {
+  await mockGame(page);
+  await page.route('**/api/auth/me', (route) => route.fulfill({ status: 503, json: { message: 'Server waking up.' } }));
+  await page.goto('/games/game-1');
+  await expect(page.getByRole('alert')).toContainText('Server waking up.');
+  await expect(page).toHaveURL(/\/games\/game-1$/);
+  await page.route('**/api/auth/me', (route) => route.fulfill({ json: { user: { id: 'user-1', username: 'Player' } } }));
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('heading', { name: 'Test Hive', exact: true })).toBeVisible();
+});
+
+test('expired sessions return to authentication with the current destination', async ({ page }) => {
+  await mockGame(page);
+  await page.goto('/games/game-1');
+  await page.getByRole('textbox', { name: 'Favorite snack?' }).fill('Pizza');
+  await page.route('**/api/games/game-1/active-round/save', (route) => route.fulfill({
+    status: 401, json: { message: 'Authentication required.' },
+  }));
+  await page.getByRole('button', { name: 'Save Answers' }).click();
+  await expect(page).toHaveURL(/\/auth\?next=/);
+  expect(new URL(page.url()).searchParams.get('next')).toContain('/games/game-1');
+});
+
+test('an old invite response cannot redirect away from the current invite', async ({ page }) => {
+  let releaseOld;
+  const gate = new Promise((resolve) => { releaseOld = resolve; });
+  let started;
+  const oldStarted = new Promise((resolve) => { started = resolve; });
+  await page.route('**/api/join/old', async (route) => {
+    started();
+    await gate;
+    await route.fulfill({ json: { requiresAuth: true } });
+  });
+  await page.route('**/api/join/new', (route) => route.fulfill({ json: { requiresAuth: true } }));
+  await page.goto('/join/old');
+  await oldStarted;
+  await page.evaluate(() => {
+    window.history.pushState(null, '', '/join/new');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(/\/auth\?invite=new$/);
+  releaseOld();
+  await expect(page.getByRole('heading', { name: 'Create account' })).toBeVisible();
+  await expect(page).toHaveURL(/\/auth\?invite=new$/);
+});
+
+test('signup keeps the new session when joining an invitation fails', async ({ page }) => {
+  await page.route('**/api/auth/signup', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ user: { id: 'user-1', username: 'Player' }, pendingInviteToken: 'missing' }),
+  }));
+  await page.route('**/api/join/missing', (route) => route.fulfill({
+    status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Invite link is invalid.' }),
+  }));
+  await page.goto('/auth?invite=missing');
+  await page.getByLabel('Email').fill('player@example.com');
+  await page.getByLabel('Username').fill('Player');
+  await page.getByLabel('Password', { exact: true }).fill('test-password');
+  await page.getByLabel('Confirm password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign up', exact: true }).click();
+  await expect(page).toHaveURL(/\/join\/missing$/);
+  await expect(page.getByRole('alert')).toHaveText('Invite link is invalid.');
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Create account' })).toHaveCount(0);
+});
+
 test('landing and authentication remain usable without horizontal overflow', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'How well do you know your group?' })).toBeVisible();
