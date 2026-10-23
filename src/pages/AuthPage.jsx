@@ -68,69 +68,71 @@ export default function AuthPage() {
         <p>Use your username on all leaderboards. Keep it iconic.</p>
 
         <form className="stack" onSubmit={handleSubmit}>
-          <label className="field stack-xs">
-            <span>Email</span>
-            <input
-              placeholder="you@example.com"
-              type="email"
-              autoComplete="email"
-              value={form.email}
-              onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-              required
-            />
-          </label>
-
-          {isSignup && (
+          <fieldset className="stack" disabled={submitting}>
             <label className="field stack-xs">
-              <span>Username</span>
+              <span>Email</span>
               <input
-                placeholder="Letters, numbers, and underscores"
-                autoComplete="username"
-                minLength={3}
-                maxLength={24}
-                value={form.username}
-                onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                placeholder="you@example.com"
+                type="email"
+                autoComplete="email"
+                value={form.email}
+                onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
                 required
               />
             </label>
-          )}
 
-          <label className="field stack-xs">
-            <span>Password</span>
-            <input
-              placeholder={isSignup ? 'At least 8 characters' : 'Your password'}
-              type="password"
-              autoComplete={isSignup ? 'new-password' : 'current-password'}
-              minLength={isSignup ? 8 : 1}
-              value={form.password}
-              onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-              required
-            />
-          </label>
+            {isSignup && (
+              <label className="field stack-xs">
+                <span>Username</span>
+                <input
+                  placeholder="Letters, numbers, and underscores"
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={24}
+                  value={form.username}
+                  onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                  required
+                />
+              </label>
+            )}
 
-          {isSignup && (
             <label className="field stack-xs">
-              <span>Confirm password</span>
+              <span>Password</span>
               <input
-                placeholder="Repeat your password"
+                placeholder={isSignup ? 'At least 8 characters' : 'Your password'}
                 type="password"
-                autoComplete="new-password"
-                minLength={8}
-                value={form.confirmPassword}
-                onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                autoComplete={isSignup ? 'new-password' : 'current-password'}
+                minLength={isSignup ? 8 : 1}
+                value={form.password}
+                onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
                 required
               />
             </label>
-          )}
 
-          <button className="button" type="submit" disabled={submitting}>
-            {submitting ? 'Please wait...' : isSignup ? 'Sign up' : 'Login'}
-          </button>
+            {isSignup && (
+              <label className="field stack-xs">
+                <span>Confirm password</span>
+                <input
+                  placeholder="Repeat your password"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={form.confirmPassword}
+                  onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                  required
+                />
+              </label>
+            )}
+
+            <button className="button" type="submit" disabled={submitting}>
+              {submitting ? 'Please wait...' : isSignup ? 'Sign up' : 'Login'}
+            </button>
+          </fieldset>
         </form>
 
         {error && <p className="error" role="alert">{error}</p>}
 
-        <button className="link" onClick={() => setIsSignup((prev) => !prev)} type="button">
+        <button className="link" disabled={submitting} onClick={() => setIsSignup((prev) => !prev)} type="button">
           {isSignup ? 'Already have an account? Login' : 'Need an account? Sign up'}
         </button>
 
