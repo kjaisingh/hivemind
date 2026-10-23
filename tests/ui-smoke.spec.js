@@ -78,6 +78,28 @@ test('dashboard action failures keep loaded games visible', async ({ page }) => 
   await expect(page.getByRole('button', { name: /Existing hive/ })).toBeVisible();
 });
 
+test('draft saves lock submitted fields and retain edits after a failed request', async ({ page }) => {
+  await mockGame(page, { role: 'ADMIN' });
+  let release;
+  await page.route('**/api/games/game-1/rounds', async (route) => {
+    await new Promise((resolve) => { release = resolve; });
+    await route.fulfill({ status: 503, json: { message: 'Please retry this draft.' } });
+  });
+  await page.goto('/games/game-1?tab=manage');
+  await page.getByLabel('Round name', { exact: true }).fill('Keep my draft');
+  await page.getByLabel('Question 1', { exact: true }).fill('Keep my question');
+  await page.getByRole('button', { name: 'Create Draft' }).click();
+  await expect(page.getByLabel('Round name', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Question 1', { exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add Question', exact: true })).toBeDisabled();
+  await expect.poll(() => typeof release).toBe('function');
+  release();
+  await expect(page.getByRole('alert')).toContainText('Please retry this draft.');
+  await expect(page.getByLabel('Round name', { exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Round name', { exact: true })).toHaveValue('Keep my draft');
+  await expect(page.getByLabel('Question 1', { exact: true })).toHaveValue('Keep my question');
+});
+
 test('long game content fits narrow screens in dark mode', async ({ page }) => {
   await mockGame(page, { name: 'LongName'.repeat(10), description: 'Description'.repeat(20) });
   await page.goto('/games/game-1');

@@ -60,8 +60,7 @@ export default function ManageTab({
         <h2>Email Automation</h2>
         {!emailConfigured && (
           <p className="warning" role="status">
-            Email delivery is off. Add <code>RESEND_API_KEY</code> and <code>SMTP_FROM</code> to enable reminders
-            and announcements.
+            Email delivery is unavailable. You can still play, publish rounds, and share invite links.
           </p>
         )}
         <EmailAutomationForm

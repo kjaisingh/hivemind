@@ -115,53 +115,57 @@ export default function DashboardPage() {
         <div className="card">
           <h2>Create Game</h2>
           <form className="stack" onSubmit={createGame}>
-            <label className="field stack-xs">
-              <span>Game name</span>
-              <input
-                placeholder="Game name"
-                value={createForm.name}
-                onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
-                required
-                minLength={2}
-                maxLength={80}
-              />
-            </label>
-            <label className="field stack-xs">
-              <span>Description</span>
-              <textarea
-                placeholder="Game description"
-                value={createForm.description}
-                onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))}
-                required
-                minLength={2}
-                maxLength={240}
-              />
-            </label>
-            <button className="button" type="submit" disabled={creatingGame}>
-              {creatingGame ? 'Creating...' : 'Create Game'}
-            </button>
+            <fieldset className="stack" disabled={creatingGame}>
+              <label className="field stack-xs">
+                <span>Game name</span>
+                <input
+                  placeholder="Game name"
+                  value={createForm.name}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                  minLength={2}
+                  maxLength={80}
+                />
+              </label>
+              <label className="field stack-xs">
+                <span>Description</span>
+                <textarea
+                  placeholder="Game description"
+                  value={createForm.description}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))}
+                  required
+                  minLength={2}
+                  maxLength={240}
+                />
+              </label>
+              <button className="button" type="submit" disabled={creatingGame}>
+                {creatingGame ? 'Creating...' : 'Create Game'}
+              </button>
+            </fieldset>
           </form>
         </div>
 
         <div className="card">
           <h2>Join Game</h2>
           <form className="stack" onSubmit={joinGame}>
-            <label className="field stack-xs">
-              <span>Game code</span>
-              <input
-                placeholder="Enter game code (ABC-234)"
-                value={joinCode}
-                onChange={(event) => setJoinCode(formatJoinCode(event.target.value))}
-                autoCapitalize="characters"
-                autoComplete="off"
-                required
-                maxLength={7}
-                pattern="[A-Z2-9]{3}-[A-Z2-9]{3}"
-              />
-            </label>
-            <button className="button" type="submit" disabled={joiningGame}>
-              {joiningGame ? 'Joining...' : 'Join'}
-            </button>
+            <fieldset className="stack" disabled={joiningGame}>
+              <label className="field stack-xs">
+                <span>Game code</span>
+                <input
+                  placeholder="Enter game code (ABC-234)"
+                  value={joinCode}
+                  onChange={(event) => setJoinCode(formatJoinCode(event.target.value))}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  required
+                  maxLength={7}
+                  pattern="[A-Z2-9]{3}-[A-Z2-9]{3}"
+                />
+              </label>
+              <button className="button" type="submit" disabled={joiningGame}>
+                {joiningGame ? 'Joining...' : 'Join'}
+              </button>
+            </fieldset>
           </form>
           <p className="small">Tip: invite links also auto-join if you are already signed in.</p>
         </div>

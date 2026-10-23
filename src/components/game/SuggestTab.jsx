@@ -20,17 +20,19 @@ export default function SuggestTab({
       <div className="card stack">
         <h2>Suggest a Question</h2>
         <form className="stack" onSubmit={onSubmitSuggestion}>
-          <textarea
-            aria-label="Question suggestion"
-            placeholder="What should we ask next round?"
-            value={suggestionPrompt}
-            onChange={(event) => setSuggestionPrompt(event.target.value)}
-            maxLength={240}
-            required
-          />
-          <button className="button" type="submit" disabled={submittingSuggestion}>
-            {submittingSuggestion ? 'Submitting...' : 'Submit Suggestion'}
-          </button>
+          <fieldset className="stack" disabled={submittingSuggestion}>
+            <textarea
+              aria-label="Question suggestion"
+              placeholder="What should we ask next round?"
+              value={suggestionPrompt}
+              onChange={(event) => setSuggestionPrompt(event.target.value)}
+              maxLength={240}
+              required
+            />
+            <button className="button" type="submit" disabled={submittingSuggestion}>
+              {submittingSuggestion ? 'Submitting...' : 'Submit Suggestion'}
+            </button>
+          </fieldset>
         </form>
       </div>
 
