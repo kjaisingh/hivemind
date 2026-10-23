@@ -10,7 +10,6 @@ process.env.RESEND_API_KEY = 'test-key';
 process.env.SMTP_FROM = 'hive@example.com';
 
 const { supabase, readAll, readByIds } = await import('../../server/db.js');
-const { scoreRound } = await import('../../server/scoring.js');
 const { getGameDetail, getRoundResults } = await import('../../server/repository.js');
 const { processRounds, processNotifications } = await import('../../server/roundScheduler.js');
 const { default: roundsRoutes } = await import('../../server/routes/rounds.js');
@@ -29,13 +28,10 @@ function gameTables(playerCount = 1, questionCount = 1) {
   };
 }
 
-test('scoring and results include every answer beyond the database row limit', async () => {
+test('results include every answer statistic beyond the database row limit', async () => {
   const tables = gameTables(75, 20);
   const db = mockDatabase(tables);
-  await scoreRound(db, 'round-1');
-  assert.equal(tables.RoundScore.length, 75);
-  assert.ok(tables.RoundScore.every((score) => score.totalScore === 20));
-  assert.equal(tables.QuestionAnswerStat.length, 1500);
+  tables.QuestionAnswerStat = tables.Submission.map((answer) => ({ id: answer.id, questionId: answer.questionId, count: 1 }));
   const results = await getRoundResults(db, 'round-1', 'game-1', 'user-0');
   assert.ok(results.questions.every((question) => question.answerStats.length === 75));
   assert.ok(results.questions.every((question) => question.submissions[0].rawAnswer === 'Player0'));
@@ -83,6 +79,12 @@ test('round closure never waits for email and failed notifications retry without
     keys.push(options.headers['Idempotency-Key']);
     return { ok: attempts > 1, status: 503 };
   });
+  db.rpc = async (name, args) => {
+    assert.equal(name, 'close_round');
+    assert.equal(args.p_round_id, 'round-1');
+    tables.Round[0].status = 'CLOSED';
+    return { data: true, error: null };
+  };
   await processRounds(db);
   assert.equal(tables.Round[0].status, 'CLOSED');
   assert.equal(attempts, 0);
@@ -119,6 +121,12 @@ test('publish returns before delivery and progress counts every completed player
   t.mock.method(supabase, 'from', (table) => {
     assert.notEqual(table, 'EmailDeliveryLog', 'publish must not wait for email delivery');
     return db.from(table);
+  });
+  t.mock.method(supabase, 'rpc', async (name, args) => {
+    assert.equal(name, 'publish_round');
+    assert.equal(args.p_round_id, 'round-1');
+    tables.Round[0].status = 'ACTIVE';
+    return { data: null, error: null };
   });
   const app = express();
   app.use(express.json());

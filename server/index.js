@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { supabase } from './db.js';
 import { pageLimiter } from './limiters.js';
+import { requireTrustedOrigin } from './middleware.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
 import { startRoundScheduler } from './roundScheduler.js';
 import authRoutes from './routes/auth.js';
@@ -57,6 +58,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '100kb' }));
+app.use('/api', requireTrustedOrigin(clientUrl));
 app.use(createSessionMiddleware());
 configurePassport(supabase);
 app.use(passport.initialize());
@@ -98,7 +100,7 @@ app.use((error, _req, res, _next) => {
     return res.status(400).json({ message: 'Request body must be valid JSON.' });
   }
   console.error('[server]', error);
-  res.status(error.status || 500).json({ message: 'Something went wrong. Please try again.' });
+  res.status(error.status || 500).json({ message: error.expose ? error.message : 'Something went wrong. Please try again.' });
 });
 
 let schedulerTimer;

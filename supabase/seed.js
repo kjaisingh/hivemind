@@ -4,7 +4,6 @@ import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 import { supabase, unwrap } from '../server/db.js';
 import { normalizeAnswer } from '../server/utils.js';
-import { scoreRound } from '../server/scoring.js';
 
 const RESET_CONFIRMATION = 'RESET_ALL_HIVEMIND_DATA';
 
@@ -121,8 +120,7 @@ async function main() {
   await createSubmission(closedQuestions[2].id, playerB.id, 'Bowling');
   await createSubmission(closedQuestions[2].id, playerC.id, 'Bowling');
 
-  await scoreRound(supabase, closedRound.id);
-  unwrap(await supabase.from('Round').update({ status: 'CLOSED' }).eq('id', closedRound.id));
+  unwrap(await supabase.rpc('close_round', { p_round_id: closedRound.id }));
 
   const activeRound = unwrap(
     await supabase

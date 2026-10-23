@@ -20,7 +20,7 @@ Hivemind is a multiplayer guessing game. Answer as you think your group will ans
 
 ## Setup
 
-1. Install Node.js 22 or newer and create a Supabase project. Run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor.
+1. Install Node.js 22 or newer and create a Supabase project. Run [`supabase/schema.sql`](supabase/schema.sql), then [`supabase/functions.sql`](supabase/functions.sql) in its SQL Editor. Existing installations also need `functions.sql` before updating the server; it is safe to rerun.
 2. Copy the environment template, then set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a random `SESSION_SECRET` in `.env`.
 
    ```bash

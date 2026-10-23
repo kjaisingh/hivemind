@@ -1,5 +1,4 @@
 import dayjs from 'dayjs';
-import { scoreRound } from './scoring.js';
 import { isEmailConfigured, sendEmail } from './email.js';
 import { toHoursArray } from './utils.js';
 import { getRoundsForClosing, getActiveRoundsWithContext, getRecentClosedRoundsWithContext } from './repository.js';
@@ -75,8 +74,7 @@ async function runProcessRounds(supabase) {
   const roundsToClose = await getRoundsForClosing(supabase, now);
   for (const round of roundsToClose) {
     try {
-      await scoreRound(supabase, round.id);
-      unwrap(await supabase.from('Round').update({ status: 'CLOSED' }).eq('id', round.id).eq('status', 'ACTIVE'));
+      unwrap(await supabase.rpc('close_round', { p_round_id: round.id }));
     } catch (error) {
       console.error('[scheduler] Round close failed.', { roundId: round.id, error });
     }
