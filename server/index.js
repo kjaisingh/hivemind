@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { supabase } from './db.js';
 import { pageLimiter } from './limiters.js';
+import { requireTrustedOrigin } from './middleware.js';
 import { createSessionMiddleware, configurePassport, passport } from './auth.js';
 import { startRoundScheduler } from './roundScheduler.js';
 import authRoutes from './routes/auth.js';
@@ -57,6 +58,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '100kb' }));
+app.use('/api', requireTrustedOrigin(clientUrl));
 app.use(createSessionMiddleware());
 configurePassport(supabase);
 app.use(passport.initialize());
